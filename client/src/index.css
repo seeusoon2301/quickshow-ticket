@@ -1,0 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #F84565;
+  --color-primary-dull: #D63854;
+}
+
+* {
+  font-family: "Outfit", sans-serif;
+  scrollbar-width: thin;
+  scrollbar-color: #787777 #1e1e1e;
+}
+
+body {
+  color: white;
+  background-color: rgb(36, 36, 36);
+}
+
+@keyframes bounce-dot {
+  0%, 80%, 100% {
+    transform: scale(0.4);
+    opacity: 0.7;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-bounce-dot {
+  animation: bounce-dot 1s infinite ease-in-out;
+}
+
+/* Delay tuỳ chỉnh cho từng dot */
+.delay-\[0ms\] { animation-delay: 0ms; }
+.delay-\[200ms\] { animation-delay: 200ms; }
+.delay-\[400ms\] { animation-delay: 400ms; }
+
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    #2f2f2f 25%,
+    #424242 50%,
+    #2f2f2f 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.25s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
