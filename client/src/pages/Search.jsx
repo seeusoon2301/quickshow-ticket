@@ -25,12 +25,9 @@ const Search = () => {
 
   return (
     <div className="px-6 md:px-40 py-8">
-      <h2 className="text-2xl font-bold mt-48 mb-12">
-        Search for “{query}” :
-      </h2>
+      <h2 className="text-2xl font-bold mt-48 mb-12">Search for “{query}” :</h2>
 
       {loading ? (
-        // ✅ Skeleton shimmer Netflix style
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {[1, 2, 3, 4].map((i) => (
             <div
@@ -47,31 +44,31 @@ const Search = () => {
           ))}
         </div>
       ) : results.length === 0 ? (
-        <p className="text-gray-400">Không có kết quả nào.</p>
+        <p className="text-gray-400">No search here.</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
           {results.slice(0, 4).map((ev) => (
             <div
               key={ev._id}
-              className="rounded-2xl overflow-hidden bg-gray hover:scale-[1.05] transition duration-300 cursor-pointer shadow-lg"
+              className="bg-gray-900 rounded-lg shadow-md overflow-hidden cursor-pointer"
             >
               <img
                 src={ev.image}
                 alt={ev.name}
-                className="w-full h-48 object-cover"
+                className="w-full h-60 sm:h-72 md:h-60 object-cover rounded-lg mb-4"
               />
 
-              <div className="p-4">
-                <h3 className="font-semibold text-lg line-clamp-2">{ev.name}</h3>
-                <p className="text-gray-400 text-sm mt-1">
-                  {ev.date} — {ev.place}
-                </p>
+              <div className="px-3 mb-4">
+                <h3 className="text-lg font-bold text-white line-clamp-1 truncate">
+                  {ev.name}
+                </h3>
+              </div>
 
-                {ev.tickets?.[0] && (
-                  <p className="text-primary font-bold mt-2">
-                    {ev.tickets[0].price.toLocaleString()}đ
-                  </p>
-                )}
+              <div className="flex items-center justify-between text-gray-400 px-3 pb-3">
+                <span>{ev.date}</span>
+                <p className="text-primary font-bold">
+                  {ev.tickets?.[0]?.price?.toLocaleString()}đ
+                </p>
               </div>
             </div>
           ))}

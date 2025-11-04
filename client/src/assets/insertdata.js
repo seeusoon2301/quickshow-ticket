@@ -5,7 +5,7 @@ const uri =
 
 const eventData = {
   name: "[CAT&MOUSE] Ca sĩ Jaykii và ca sĩ Đăng Khôi - Khi tình và nhạc giao thoa",
-  category: "other",
+  category: "music",
   type: "special",
   place: "Cat&Mouse Live Music",
   time: "20:00 - 23:00",

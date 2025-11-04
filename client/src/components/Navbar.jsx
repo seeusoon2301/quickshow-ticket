@@ -19,28 +19,39 @@ const Navbar = () => {
 
   // ✅ Theo dõi cuộn để ẩn navbar
   useEffect(() => {
-    const handleScroll = () => {
+  const handleScroll = () => {
+      // Nếu popup search mở thì không cho navbar biến mất
+      if (isSearchOpen) {
+        setIsVisible(true);
+        return;
+      }
+
       const currentScrollY = window.scrollY;
       if (currentScrollY > lastScrollY && currentScrollY > 100) setIsVisible(false);
       else setIsVisible(true);
       setLastScrollY(currentScrollY);
     };
+
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
-  }, [lastScrollY]);
+  }, [lastScrollY, isSearchOpen]);
+
 
   // ✅ Click ngoài box thì đóng popup featured
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (searchRef.current && !searchRef.current.contains(e.target)) {
         setIsSearchOpen(false);
+        setTimeout(() => setResults([]), 200);
       }
     };
-    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("pointerdown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+
   const isActive = (path) => location.pathname === path;
+
 
   return (
     <div
@@ -89,7 +100,7 @@ const Navbar = () => {
         <div className="relative hidden md:block">
           <input
             type="text"
-            placeholder="Search..."
+            placeholder="Search events, artists..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             onFocus={() => setIsSearchOpen(true)}
@@ -97,69 +108,96 @@ const Navbar = () => {
               if (e.key === "Enter" && searchTerm.trim() !== "") {
                 navigate(`/search?q=${encodeURIComponent(searchTerm.trim())}`);
                 setSearchTerm("");
-                setResults([]);
                 setIsSearchOpen(false);
               }
             }}
-            className="pl-10 pr-4 py-2 rounded-2xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-primary transition-all w-56 text-black font-semibold"
+            className="pl-10 pr-4 py-2 rounded-2xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-primary transition-all w-64 text-black font-semibold"
           />
           <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-5 h-5 cursor-pointer" />
 
-          {/* ✅ Popup Featured */}
-          {isSearchOpen && searchTerm.trim() === "" && (
-            <div className="absolute top-full left-[-650px] w-[850px] bg-white shadow-lg rounded-lg p-5 z-50">
-              <h3 className="text-lg font-bold mb-3">Featured Events</h3>
-              <div className="grid grid-cols-3 gap-4">
-                {[
-                  { name: "Jazz Night", img: "https://res.cloudinary.com/dop04mb3s/image/upload/v1761126982/tggbcixrnlqe33pvvxku.jpg" },
-                  { name: "Drama Show", img: "https://res.cloudinary.com/dop04mb3s/image/upload/v1761126982/tggbcixrnlqe33pvvxku.jpg" },
-                  { name: "Live Orchestra", img: "https://res.cloudinary.com/dop04mb3s/image/upload/v1761126982/tggbcixrnlqe33pvvxku.jpg" },
-                ].map((f, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-3 p-2 border rounded-lg hover:bg-gray-100 transition cursor-pointer"
-                    onClick={() => navigate("/music")}
-                  >
-                    <img src={f.img} alt={f.name} className="w-12 h-12 rounded-md object-cover" />
-                    <p className="font-semibold text-sm text-black">{f.name}</p>
+          {/* ✅ SEARCH DROPDOWN */}
+          {isSearchOpen && (
+            <div className="absolute top-full left-0 mt-2 w-[420px] bg-white shadow-xl border rounded-xl p-4 z-50 animate-fadeIn">
+
+              {/* Nếu đang nhập searchTerm → Gợi ý */}
+              {searchTerm.trim() !== "" ? (
+                <div className="space-y-2">
+                  <p className="text-sm text-gray-600">Search suggestions</p>
+                  {["Taylor Swift Tour", "Ho Chi Minh Concert", "EDM Festival", "Comedy Show"]
+                    .filter(item => item.toLowerCase().includes(searchTerm.toLowerCase()))
+                    .map((item, i) => (
+                      <div
+                        key={i}
+                        className="px-3 py-2 flex gap-3 items-center hover:bg-gray-100 rounded-lg cursor-pointer"
+                        onClick={() => navigate(`/search?q=${item}`)}
+                      >
+                        <SearchIcon className="w-4 h-4 text-gray-500" />
+                        <span className="text-black">{item}</span>
+                      </div>
+                    ))}
+                </div>
+              ) : (
+                /* ✅ Featured search khi chưa gõ */
+                <div>
+                  <p className="text-sm text-gray-600 mb-2">Trending Searches</p>
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {["Jazz Night", "Rock Concert", "KPop Show", "Theater", "Stand-up Comedy"].map((tag, i) => (
+                      <span
+                        key={i}
+                        onClick={() => navigate(`/search?q=${tag}`)}
+                        className="text-xs bg-gray-200 hover:bg-primary hover:text-white transition px-3 py-1 rounded-full cursor-pointer"
+                      >
+                        {tag}
+                      </span>
+                    ))}
                   </div>
-                ))}
-              </div>
+
+                  <p className="text-sm text-gray-600 mb-2">Popular Events</p>
+                  <div className="space-y-2">
+                    {[
+                      { name: "Jazz Night Live", img: "https://i.ibb.co/2kQZ5W8/event1.jpg" },
+                      { name: "Orchestra Symphony", img: "https://i.ibb.co/Ht4qWjh/event2.jpg" },
+                      { name: "Kpop Tour 2025", img: "https://i.ibb.co/MG3Rw6Z/event3.jpg" },
+                    ].map((ev, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded-lg cursor-pointer"
+                        onClick={() => navigate("/music")}
+                      >
+                        <img src={ev.img} className="w-10 h-10 rounded-md object-cover" />
+                        <p className="font-medium text-black text-sm">{ev.name}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
 
-        <SearchIcon className="md:hidden w-6 h-6 cursor-pointer ml-2" />
+  <SearchIcon className="md:hidden w-6 h-6 cursor-pointer ml-2" />
 
-        {!user ? (
-          <button
-            onClick={openSignIn}
-            className="px-4 py-1 sm:px-7 sm:py-2 bg-primary hover:bg-primary-dull transition rounded-full font-bold cursor-pointer -ml-2"
-          >
-            Login
-          </button>
-        ) : (
-          <UserButton
-            appearance={{
-              elements: {
-                avatarBox: {
-                  border: "2px solid #F84565",
-                  width: "48px",
-                  height: "48px",
-                },
-              },
-            }}
-          >
-            <UserButton.MenuItems>
-              <UserButton.Action
-                label="My Tickets"
-                labelIcon={<TicketPlus width={15} />}
-                onClick={() => navigate("/my-tickets")}
-              />
-            </UserButton.MenuItems>
-          </UserButton>
-        )}
-      </div>
+  {!user ? (
+    <button
+      onClick={openSignIn}
+      className="px-4 py-1 sm:px-7 sm:py-2 bg-primary hover:bg-primary-dull transition rounded-full font-bold cursor-pointer -ml-2"
+    >
+      Login
+    </button>
+  ) : (
+    <UserButton appearance={{ elements: { avatarBox: { border: "2px solid #F84565", width: "48px", height: "48px" }}}}
+    >
+      <UserButton.MenuItems>
+        <UserButton.Action
+          label="My Tickets"
+          labelIcon={<TicketPlus width={15} />}
+          onClick={() => navigate("/my-tickets")}
+        />
+      </UserButton.MenuItems>
+    </UserButton>
+  )}
+</div>
+
 
       <MenuIcon
         className="max-md:ml-4 md:hidden w-8 h-8 cursor-pointer"
