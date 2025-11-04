@@ -95,6 +95,7 @@ const WeeklyMonthlyEvents = () => {
         {sortedFilteredEvents.slice(0, 4).map((card) => (
           <div
             key={card._id}
+            onClick={() => navigate(`/event/${card._id}`)}
             className="bg-[rgb(37,36,36)] rounded-lg shadow-md overflow-hidden cursor-pointer hover:scale-105 transition"
           >
             <img src={card.image} alt={card.name} className="w-full h-48 sm:h-60 object-cover" />

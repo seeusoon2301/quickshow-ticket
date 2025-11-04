@@ -94,7 +94,7 @@ const SpecialEvents = () => {
               ))
             : specialEvents.map((event) => (
                 <SwiperSlide key={event._id}>
-                  <div className="rounded-2xl overflow-hidden shadow-lg relative cursor-pointer">
+                  <div onClick={() => window.location.assign(`/event/${event._id}`)} className="rounded-2xl overflow-hidden shadow-lg relative cursor-pointer">
                     <img
                       src={event.image}
                       alt={event.name}

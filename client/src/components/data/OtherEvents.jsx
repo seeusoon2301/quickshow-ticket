@@ -47,6 +47,7 @@ const OtherEvents = () => {
         {otherEvents.slice(0, 4).map((card) => (
           <div
             key={card._id}
+            onClick={() => navigate(`/event/${card._id}`)}
             className="bg-[rgb(37,36,36)] rounded-lg shadow-md overflow-hidden cursor-pointer transform transition-all duration-300 hover:scale-105 flex flex-col justify-between h-full"
           >
             <div>

@@ -103,6 +103,7 @@ const TopPicks = () => {
           : trendingEvents.map((card) => (
               <SwiperSlide key={card._id}>
                 <div
+                  onClick={() => window.location.assign(`/event/${card._id}`)}
                   className="shrink-0 w-[250px] sm:w-[300px] md:w-[350px] lg:w-[480px]
                   bg-[rgb(37,36,36)] rounded-lg shadow-md overflow-hidden cursor-pointer"
                 >

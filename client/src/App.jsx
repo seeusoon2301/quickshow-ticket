@@ -7,6 +7,8 @@ import MusicPage from './pages/Music'
 import TheaterAndArtPage from './pages/TheaterAndArt';
 import SportPage from './pages/Sport';
 import OtherPage from './pages/Other';
+import EventDetail from './pages/EventDetail'
+import Footer from './components/Footer'
 
 const App = () => {
   return (
@@ -19,7 +21,9 @@ const App = () => {
         <Route path='/theatersandart' element={<TheaterAndArtPage />} />
         <Route path='/sport' element={<SportPage />} />
         <Route path='/other' element={<OtherPage />} />
+        <Route path='/event/:id' element={<EventDetail />} />
       </Routes>
+      <Footer />
     </>
   )
 }
