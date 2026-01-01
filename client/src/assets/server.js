@@ -68,9 +68,11 @@
 import express from "express";
 import cors from "cors";
 import { MongoClient } from "mongodb";
+import { ObjectId } from "mongodb";
 
 const app = express();
 app.use(cors());
+app.use(express.json());
 const PORT = 5000;
 
 const uri =
@@ -106,6 +108,50 @@ app.get("/events", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+app.get("/events/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const event = await collection.findOne({ _id: new ObjectId(id) });
+
+    if (!event) {
+      return res.status(404).json({ error: "Event not found" });
+    }
+
+    res.json(event);
+  } catch (err) {
+    res.status(500).json({
+      error: "Failed to fetch event",
+      details: err.message,
+    });
+  }
+});
+
+app.put("/events/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { tickets } = req.body;
+
+    const result = await collection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { tickets } }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: "Event not found" });
+    }
+
+    const updatedEvent = await collection.findOne({ _id: new ObjectId(id) });
+    res.json(updatedEvent);
+
+  } catch (err) {
+    res.status(500).json({
+      error: "Update failed",
+      details: err.message,
+    });
+  }
+});
+
 
 app.listen(PORT, () =>
   console.log(`Server đang chạy tại http://localhost:${PORT}`)

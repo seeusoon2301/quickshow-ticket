@@ -70,7 +70,7 @@ const EventDetail = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <div className="md:col-span-2">
           <div className="rounded-xl overflow-hidden">
-            <img src={event.image} alt={event.name} className="w-full h-96 object-cover rounded-lg" />
+            <img src={event.image} alt={event.name} className="w-full h-72 object-cover rounded-lg" />
             <div className="mt-5">
               <h1 className="text-3xl md:text-4xl font-bold">{event.name}</h1>
               <div className="flex items-center gap-4 mt-3 text-gray-300">
