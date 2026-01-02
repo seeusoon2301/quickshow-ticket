@@ -5,15 +5,19 @@ import "swiper/css";
 import "swiper/css/free-mode";
 import "swiper/css/navigation";
 
+const API_BASE = "http://localhost:5000/api";
+
 const SpecialEvents = () => {
   const [specialEvents, setSpecialEvents] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("http://localhost:5000/events")
+    fetch(`${API_BASE}/concerts`)
       .then((res) => res.json())
-      .then((data) => {
-        const specials = data.filter((e) => e.type === "special");
+      .then((response) => {
+        const concerts = response.data?.concerts || response.data || response.concerts || [];
+        // Filter for special category concerts
+        const specials = concerts.filter((e) => e.category === "special" || e.category === "theater");
 
         // Delay để skeleton hiển thị
         setTimeout(() => {
@@ -96,8 +100,8 @@ const SpecialEvents = () => {
                 <SwiperSlide key={event._id}>
                   <div onClick={() => window.location.assign(`/event/${event._id}`)} className="rounded-2xl overflow-hidden shadow-lg relative cursor-pointer">
                     <img
-                      src={event.image}
-                      alt={event.name}
+                      src={event.thumbnail}
+                      alt={event.title}
                       className="w-full h-100 object-cover"
                     />
                     <div className="absolute inset-0 bg-linear-to-t from-black/50"></div>

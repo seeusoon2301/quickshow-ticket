@@ -1,0 +1,204 @@
+@startuml QuickShow_Ticket_ERD_Simplified
+
+!define PRIMARY_KEY(x) <b><color:#b8860b><&key></color> x</b>
+!define FOREIGN_KEY(x) <color:#aaaaaa><&link-intact></color> x
+!define COLUMN(x) <color:#efefef><&media-record></color> x
+
+title QuickShow Ticket - Simplified ERD (13 Entities)
+skinparam linetype ortho
+skinparam backgroundColor #FEFEFE
+skinparam roundcorner 10
+
+note as N1
+  **User roles are embedded in User model**
+  - CUS (Customer): dob, address, loyalty_points
+  - STAFF: employee_code, shift
+  - ORG (Organizer): company_name, tax_code
+  - ADMIN: system management
+end note
+
+' ==================== USER ====================
+entity "User" as user {
+    PRIMARY_KEY(_id) : ObjectId
+    --
+    COLUMN(username) : String <<unique>>
+    COLUMN(password_hash) : String
+    COLUMN(email) : String <<unique>>
+    COLUMN(phone) : String
+    COLUMN(role) : Enum {ADMIN, STAFF, ORG, CUS}
+    COLUMN(status) : Boolean
+    --
+    ' Embedded: customer{}, staff{}, organizer{}
+    --
+    +login()
+    +logout()
+}
+
+' ==================== ARTIST ====================
+entity "Artist" as artist {
+    PRIMARY_KEY(_id) : ObjectId
+    --
+    COLUMN(name) : String
+    COLUMN(bio) : Text
+    COLUMN(genre) : String (Pop, Rock...)
+    COLUMN(image) : String
+}
+
+' ==================== VENUE ====================
+entity "Venue" as venue {
+    PRIMARY_KEY(_id) : ObjectId
+    --
+    COLUMN(name) : String
+    COLUMN(address) : String
+    COLUMN(total_capacity) : Number
+    COLUMN(map_image) : String
+}
+
+' ==================== ZONE ====================
+entity "Zone" as zone {
+    PRIMARY_KEY(_id) : ObjectId
+    --
+    FOREIGN_KEY(venue) : ObjectId <<Venue>>
+    COLUMN(name) : String (Zone A, VIP...)
+    COLUMN(capacity) : Number
+}
+
+' ==================== SEAT ====================
+entity "Seat" as seat {
+    PRIMARY_KEY(_id) : ObjectId
+    --
+    FOREIGN_KEY(zone) : ObjectId <<Zone>>
+    COLUMN(row) : String
+    COLUMN(number) : Number
+}
+
+' ==================== CONCERT ====================
+entity "Concert" as concert {
+    PRIMARY_KEY(_id) : ObjectId
+    --
+    COLUMN(title) : String
+    COLUMN(description) : Text
+    COLUMN(start_time) : DateTime
+    COLUMN(end_time) : DateTime
+    COLUMN(status) : Enum {DRAFT, PUB, CANCEL}
+    COLUMN(thumbnail) : String
+    FOREIGN_KEY(venue) : ObjectId <<Venue>>
+    FOREIGN_KEY(organizer) : ObjectId <<Organizer>>
+    --
+    +updateInfo()
+}
+
+' ==================== TICKET CLASS ====================
+entity "TicketClass" as ticketclass {
+    PRIMARY_KEY(_id) : ObjectId
+    --
+    FOREIGN_KEY(concert) : ObjectId <<Concert>>
+    FOREIGN_KEY(zone) : ObjectId <<Zone>>
+    COLUMN(name) : String (Early Bird, VIP...)
+    COLUMN(price) : Decimal
+    COLUMN(quota) : Number
+    COLUMN(sold_qty) : Number
+    COLUMN(open_time) : DateTime
+}
+
+' ==================== SHOW SEAT ====================
+entity "ShowSeat" as showseat {
+    PRIMARY_KEY(_id) : ObjectId
+    --
+    FOREIGN_KEY(concert) : ObjectId <<Concert>>
+    FOREIGN_KEY(seat) : ObjectId <<Seat>>
+    COLUMN(status) : Enum {AVAILABLE, LOCKED, SOLD}
+    COLUMN(lock_expire_time) : DateTime
+}
+
+' ==================== TICKET ====================
+entity "Ticket" as ticket {
+    PRIMARY_KEY(_id) : ObjectId
+    --
+    FOREIGN_KEY(showSeat) : ObjectId <<ShowSeat>>
+    FOREIGN_KEY(ticketClass) : ObjectId <<TicketClass>>
+    COLUMN(ticket_code) : String <<unique>>
+    COLUMN(qr_hash) : String
+    COLUMN(status) : Enum {VALID, USED, REFUNDED}
+    --
+    +generateQR()
+}
+
+' ==================== VOUCHER ====================
+entity "Voucher" as voucher {
+    PRIMARY_KEY(_id) : ObjectId
+    --
+    COLUMN(code) : String <<unique>>
+    COLUMN(discount_percent) : Float
+    COLUMN(max_amount) : Decimal
+    COLUMN(valid_until) : Date
+    COLUMN(usage_limit) : Number
+    COLUMN(used_count) : Number
+}
+
+' ==================== ORDER ====================
+entity "Order" as order {
+    PRIMARY_KEY(_id) : ObjectId
+    --
+    FOREIGN_KEY(customer) : ObjectId <<Customer>>
+    FOREIGN_KEY(voucher) : ObjectId <<Voucher>>
+    COLUMN(code) : String <<unique>>
+    COLUMN(total_amount) : Decimal
+    COLUMN(created_at) : DateTime
+    COLUMN(status) : Enum {PENDING, PAID, CANCEL}
+    --
+    +calculateTotal()
+}
+
+' ==================== ORDER DETAIL ====================
+entity "OrderDetail" as orderdetail {
+    PRIMARY_KEY(_id) : ObjectId
+    --
+    FOREIGN_KEY(order) : ObjectId <<Order>>
+    FOREIGN_KEY(ticket) : ObjectId <<Ticket>>
+    COLUMN(price_snapshot) : Decimal
+}
+
+' ==================== PAYMENT ====================
+entity "Payment" as payment {
+    PRIMARY_KEY(_id) : ObjectId
+    --
+    FOREIGN_KEY(order) : ObjectId <<Order>>
+    COLUMN(trans_id) : String <<unique>>
+    COLUMN(method) : Enum {MOMO, BANK, VISA}
+    COLUMN(amount) : Decimal
+    COLUMN(status) : Boolean
+    COLUMN(pay_time) : DateTime
+}
+
+' ==================== RELATIONSHIPS ====================
+
+' Concert relationships
+artist }o--o{ concert : "performs"
+concert }o--|| venue : "hosted at"
+concert }o--|| user : "organizer"
+
+' Venue structure
+venue ||--o{ zone : "contains"
+zone ||--o{ seat : "has"
+
+' Ticket pricing
+zone ||--o{ ticketclass : "applied to"
+concert ||--o{ ticketclass : "defines price"
+
+' Show seat mapping
+seat ||--o{ showseat : "maps to"
+concert ||--o{ showseat : "has"
+
+' Ticket generation
+ticketclass ||--o{ ticket : "is type of"
+showseat ||--o| ticket : "holds"
+
+' Order flow
+user ||--o{ order : "places (customer)"
+order ||--o{ orderdetail : "contains"
+orderdetail }o--|| ticket : "generates"
+order }o--o| voucher : "uses"
+order ||--|| payment : "paid by"
+
+@enduml

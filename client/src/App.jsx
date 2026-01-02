@@ -8,6 +8,11 @@ import TheaterAndArtPage from './pages/TheaterAndArt';
 import SportPage from './pages/Sport';
 import OtherPage from './pages/Other';
 import EventDetail from './pages/EventDetail'
+import Checkout from './pages/Checkout'
+import Payment from './pages/Payment'
+import Profile from './pages/Profile'
+import MyTickets from './pages/MyTickets'
+import OrderHistory from './pages/OrderHistory'
 import Footer from './components/Footer'
 
 const App = () => {
@@ -22,6 +27,11 @@ const App = () => {
         <Route path='/sport' element={<SportPage />} />
         <Route path='/other' element={<OtherPage />} />
         <Route path='/event/:id' element={<EventDetail />} />
+        <Route path='/checkout' element={<Checkout />} />
+        <Route path='/payment' element={<Payment />} />
+        <Route path='/profile' element={<Profile />} />
+        <Route path='/my-tickets' element={<MyTickets />} />
+        <Route path='/orders' element={<OrderHistory />} />
       </Routes>
       <Footer />
     </>

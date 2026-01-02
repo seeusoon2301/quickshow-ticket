@@ -7,18 +7,33 @@ import "swiper/css";
 import "swiper/css/free-mode";
 import "swiper/css/navigation";
 
+const API_BASE = "http://localhost:5000/api";
+
 const TopPicks = () => {
   const [trendingEvents, setTrendingEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Format helpers
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
+
+  const formatPrice = (price) => {
+    if (!price) return 'Liên hệ';
+    return price.toLocaleString('vi-VN') + 'đ';
+  };
+
   useEffect(() => {
-    fetch("http://localhost:5000/events")
+    fetch(`${API_BASE}/concerts?type=trending&limit=8`)
       .then(res => res.json())
-      .then(data => {
-        const trendings = data.filter((e) => e.type === "trending");
+      .then(response => {
+        const concerts = response.data?.concerts || [];
         setTimeout(() => {
-          setTrendingEvents(trendings);
+          setTrendingEvents(concerts);
           setLoading(false);
-        }, 2000); 
+        }, 500); 
       })
       .catch((err) => console.error("❌ Lỗi khi lấy dữ liệu:", err));
   }, []);
@@ -100,31 +115,31 @@ const TopPicks = () => {
                 <TrendingSkeletonCard />
               </SwiperSlide>
             ))
-          : trendingEvents.map((card) => (
-              <SwiperSlide key={card._id}>
+          : trendingEvents.map((concert) => (
+              <SwiperSlide key={concert._id}>
                 <div
-                  onClick={() => window.location.assign(`/event/${card._id}`)}
+                  onClick={() => window.location.assign(`/event/${concert._id}`)}
                   className="shrink-0 w-[250px] sm:w-[300px] md:w-[350px] lg:w-[480px]
                   bg-[rgb(37,36,36)] rounded-lg shadow-md overflow-hidden cursor-pointer"
                 >
                   <img
-                    src={card.image}
-                    alt={card.name}
+                    src={concert.thumbnail || concert.image}
+                    alt={concert.title || concert.name}
                     className="w-full h-60 sm:h-72 md:h-60 object-cover rounded-lg mb-4"
                   />
 
                   <div className="flex justify-between items-center mb-4 px-3">
                     <h3 className="text-lg font-bold text-white mb-2 line-clamp-1 truncate">
-                      {card.name}
+                      {concert.title || concert.name}
                     </h3>
                   </div>
 
                   <div className="flex items-center justify-between text-gray-400 px-3 pb-3">
                     <div className="flex items-center">
                       <Calendar className="w-4 h-4 mr-2" />
-                      <span>{card.date}</span>
+                      <span>{formatDate(concert.start_time || concert.date)}</span>
                     </div>
-                    <p className="text-primary font-bold">{card.price_set}đ</p>
+                    <p className="text-primary font-bold">{formatPrice(concert.minPrice || concert.price_set)}</p>
                   </div>
                 </div>
               </SwiperSlide>

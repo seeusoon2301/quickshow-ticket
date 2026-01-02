@@ -1,149 +1,93 @@
 import logo from './logo.svg'
-import bg1 from './bg1.png';
-import bg2 from './bg2.jpg';
-import bg3 from './bg3.png';
-import bg4 from './bg4.jpeg';
-import sp1 from './sp1.webp';
-import sp2 from './sp2.webp';
-import sp3 from './sp3.webp';
-import sp4 from './sp4.webp';
-import sp5 from './sp5.webp';
-import sp6 from './sp6.webp';
-import sp7 from './sp7.webp';
-import sp8 from './sp8.webp';
-import sp9 from './sp9.webp';
-import sp10 from './sp10.webp';
-import sp11 from './sp11.webp';
-import sp12 from './sp12.webp';
-import sp13 from './sp13.webp';
-import sp14 from './sp14.webp';
+
 export const assets = {
     logo,
 }
 
+// Hero section backgrounds with working Unsplash images
 export const backgrounds = [
   {
-    image: bg1,
-    name: "G-DRAGON 2025 WORLD TOUR",
+    image: 'https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?w=1920&q=80',
+    name: "Sơn Tùng M-TP: Sky Tour 2026",
     type: "Music",
-    time: "20:00 - 23:00, 08 Nov, 2025",
-    place: "8Wonder Ocean City",
-    description: "Lần đầu tiên, “Ông hoàng K-pop” G-DRAGON chính thức tổ chức concert tại Việt Nam, mở màn cho chuỗi World Tour do 8Wonder mang tới. G-DRAGON 2025 WORLD TOUR [Übermensch] hứa hẹn sẽ bùng nổ với sân khấu kì công, âm thanh - ánh sáng mãn nhãn và những khoảnh khắc chạm đến trái tim người hâm mộ. G-DRAGON sẽ mang đến những bản hit từng gắn liền với thanh xuân của hàng triệu người hâm mộ.",
+    time: "19:00 - 23:00, 15 Feb, 2026",
+    place: "Sân vận động Mỹ Đình",
+    description: "Chuyến lưu diễn âm nhạc lớn nhất năm của Sơn Tùng M-TP với những bản hit đình đám. Sự kiện âm nhạc đặc biệt mang đến trải nghiệm hoành tráng với sân khấu hiện đại và âm thanh đỉnh cao.",
   },
   {
-    image: bg2,
-    name: "Y-CONCERT BY YEAH1",
-    type: "Art",
-    time: "14:00 - 23:59, 20 Dec, 2025",
-    place: "VINHOMES OCEAN PARK 3",
-    description: "Y-CONCERT BY YEAH1 là đại nhạc hội quy tụ hàng loạt nghệ sĩ hàng đầu Việt Nam, mang đến trải nghiệm âm nhạc bùng nổ kết hợp hiệu ứng ánh sáng và sân khấu hiện đại. Sự kiện hứa hẹn sẽ là bữa tiệc nghệ thuật đỉnh cao dành cho giới trẻ, nơi âm nhạc, cảm xúc và năng lượng hòa quyện trong không gian rực rỡ của Vinhomes Ocean Park 3.",
+    image: 'https://images.unsplash.com/photo-1459749411175-04bf5292ceea?w=1920&q=80',
+    name: "Y-Concert Festival 2026",
+    type: "Music",
+    time: "14:00 - 23:59, 15 Jun, 2026",
+    place: "Sân vận động Mỹ Đình",
+    description: "Đại nhạc hội quy tụ hàng loạt nghệ sĩ hàng đầu Việt Nam, mang đến trải nghiệm âm nhạc bùng nổ kết hợp hiệu ứng ánh sáng và sân khấu hiện đại. Bữa tiệc âm nhạc đỉnh cao dành cho giới trẻ.",
   },
   {
-    image: bg3,
-    name: "SOOBIN LIVE CONCERT: ALL-ROUNDER THE FINAL",
-    type: "Sport",
-    time: "20:00 - 23:00, 29 Nov, 2025",
-    place: "THE GLOBAL CITY",
-    description: "Các all-rounders chờ đã lâu rồi phải không? Một lần nữa hãy cùng đắm chìm trong trải nghiệm sân khấu 'all around you', để SOOBIN cùng âm nhạc luôn chuyển động bên bạn mọi lúc - mọi nơi nhé!",
+    image: 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=1920&q=80',
+    name: "SOOBIN Live Concert 2026",
+    type: "Music",
+    time: "20:00 - 23:00, 01 Mar, 2026",
+    place: "Gem Center",
+    description: "Đêm nhạc đặc biệt của SOOBIN với những ca khúc mới nhất. Hãy cùng đắm chìm trong trải nghiệm sân khấu hoành tráng cùng âm nhạc tuyệt vời.",
   },
   {
-    image: bg4,
-    name: "[DELODELO SHOW] TRẠM YÊU - YÊU LẠI TỪ ĐẦU",
+    image: 'https://images.unsplash.com/photo-1429962714451-bb934ecdc4ec?w=1920&q=80',
+    name: "Tech Conference Vietnam 2026",
     type: "Other",
-    time: "19:30 - 22:30, 11 Jan, 2026",
-    place: "Cung Điền Kinh Mỹ Đình",
-    description: "Không chỉ là tình yêu đôi lứa, “Yêu lại từ đầu” là lời mời gọi bạn khép lại những điều dang dở, để can đảm bắt đầu một chương mới trọn vẹn hơn - cho chính mình, cho người khác, và cho cả cuộc sống này.Một trạm dừng giữa hai mùa đông - xuân, nơi ta nhìn lại hành trình đã qua để mở ra khởi đầu mới, đầy hy vọng và dịu dàng.",
+    time: "08:00 - 18:00, 10 Mar, 2026",
+    place: "Gem Center",
+    description: "Hội nghị công nghệ lớn nhất năm với các diễn giả hàng đầu. Nơi hội tụ những ý tưởng sáng tạo và công nghệ tiên tiến nhất.",
   },
 ];
 
+// Special events carousel with working images
 export const specialEvents = [
-  { image: sp1 },
-  { image: sp2 },
-  { image: sp3 },
-  { image: sp4 },
-  { image: sp5 },
-  { image: sp6 },
-  { image: sp7 },
-  { image: sp8 },
-  { image: sp9 },
-  { image: sp10 },
-  { image: sp11 },
-  { image: sp12 },
-  { image: sp13 },
-  { image: sp14 },
+  { image: 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=600&q=80' },
+  { image: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=600&q=80' },
+  { image: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&q=80' },
+  { image: 'https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=600&q=80' },
+  { image: 'https://images.unsplash.com/photo-1503095396549-807759245b35?w=600&q=80' },
+  { image: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=600&q=80' },
+  { image: 'https://images.unsplash.com/photo-1524368535928-5b5e00ddc76b?w=600&q=80' },
+  { image: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=600&q=80' },
+  { image: 'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?w=600&q=80' },
+  { image: 'https://images.unsplash.com/photo-1475721027785-f74eccf877e2?w=600&q=80' },
+  { image: 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=600&q=80' },
+  { image: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=600&q=80' },
+  { image: 'https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=600&q=80' },
+  { image: 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=600&q=80' },
 ];
 
-// src/data/cards.js
-
+// Sample event cards (kept for legacy compatibility, but now using API data)
 export const cards = [
   {
     id: 1,
-    image: "https://syd.cloud.appwrite.io/v1/storage/buckets/68f5fd36001502b1c195/files/68f61b670028f32c3aad/view?project=68f5f9130011d3e0f8e0&mode=admin",
-    name: "[DẾ GARDEN] Moss Frame Workshop",
-    price: "$20",
-    time: "8:00 PM",
-    category: "music",
-    place: "Dế garden",
+    image: "https://images.unsplash.com/photo-1475721027785-f74eccf877e2?w=600&q=80",
+    name: "Workshop: Làm Tranh Rêu",
+    price: "350.000đ",
+    time: "14:00 - 17:00",
+    category: "other",
+    place: "Gem Center",
     tag: "recommend",
   },
   {
     id: 2,
-    image: "https://syd.cloud.appwrite.io/v1/storage/buckets/68f5fd36001502b1c195/files/68f61b0d0014f9f846f9/view?project=68f5f9130011d3e0f8e0&mode=admin",
-    name: "GOm Show Tháng 10 - Hà Nội",
-    price: "$20",
-    time: "8:00 PM",
-    category: "music",
-    place: "Rạp Khăn Quàng Đỏ",
-    tag: "recommend",
+    image: "https://images.unsplash.com/photo-1460723237483-7a6dc9d0b212?w=600&q=80",
+    name: "GOm Show Tháng 2",
+    price: "200.000đ",
+    time: "20:00 - 22:00",
+    category: "theater",
+    place: "Nhà hát Lớn Hà Nội",
+    tag: "trending",
   },
   {
     id: 3,
-    image: "https://syd.cloud.appwrite.io/v1/storage/buckets/68f5fd36001502b1c195/files/68f61bde003df5875604/view?project=68f5f9130011d3e0f8e0&mode=admin",
-    name: "Nhà Hát Kịch IDECAF: Dưới Bóng Giai Nhân",
-    price: "$20",
-    time: "8:00 PM",
-    category: "music",
-    place: "Rạp Khăn Quàng Đỏ",
-    tag: "recommend",
-  },
-  {
-    id: 3,
-    image: "https://syd.cloud.appwrite.io/v1/storage/buckets/68f5fd36001502b1c195/files/68f61bde003df5875604/view?project=68f5f9130011d3e0f8e0&mode=admin",
-    name: "Nhà Hát Kịch IDECAF: Dưới Bóng Giai Nhân",
-    price: "$20",
-    time: "8:00 PM",
-    category: "music",
-    place: "Rạp Khăn Quàng Đỏ",
-    tag: "recommend",
-  },
-  {
-    id: 3,
-    image: "https://syd.cloud.appwrite.io/v1/storage/buckets/68f5fd36001502b1c195/files/68f61bde003df5875604/view?project=68f5f9130011d3e0f8e0&mode=admin",
-    name: "Nhà Hát Kịch IDECAF: Dưới Bóng Giai Nhân",
-    price: "$20",
-    time: "8:00 PM",
-    category: "music",
-    place: "Rạp Khăn Quàng Đỏ",
-    tag: "recommend",
-  },
-  {
-    id: 3,
-    image: "https://syd.cloud.appwrite.io/v1/storage/buckets/68f5fd36001502b1c195/files/68f61bde003df5875604/view?project=68f5f9130011d3e0f8e0&mode=admin",
-    name: "Nhà Hát Kịch IDECAF: Dưới Bóng Giai Nhân",
-    price: "$20",
-    time: "8:00 PM",
-    category: "music",
-    place: "Rạp Khăn Quàng Đỏ",
-    tag: "recommend",
-  },
-  {
-    id: 3,
-    image: "https://syd.cloud.appwrite.io/v1/storage/buckets/68f5fd36001502b1c195/files/68f61bde003df5875604/view?project=68f5f9130011d3e0f8e0&mode=admin",
-    name: "Nhà Hát Kịch IDECAF: Dưới Bóng Giai Nhân",
-    price: "$20",
-    time: "8:00 PM",
-    category: "music",
-    place: "Rạp Khăn Quàng Đỏ",
+    image: "https://images.unsplash.com/photo-1503095396549-807759245b35?w=600&q=80",
+    name: "Vở kịch: Dưới Bóng Giai Nhân",
+    price: "250.000đ",
+    time: "20:00 - 22:30",
+    category: "theater",
+    place: "Nhà hát Lớn Hà Nội",
     tag: "recommend",
   },
 ];

@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { assets } from "../assets/assets";
-import { MenuIcon, SearchIcon, TicketPlus, XIcon } from "lucide-react";
+import { MenuIcon, SearchIcon, TicketPlus, XIcon, ShoppingCart } from "lucide-react";
 import { useClerk, UserButton, useUser } from "@clerk/clerk-react";
+import { useCart } from "../context/CartContext";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const { user } = useUser();
   const { openSignIn } = useClerk();
+  const { itemCount, formatTimeRemaining, hasItems, isExpiringSoon } = useCart();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
@@ -176,6 +178,22 @@ const Navbar = () => {
         </div>
 
   <SearchIcon className="md:hidden w-6 h-6 cursor-pointer ml-2" />
+
+  {/* Cart Icon */}
+  <button
+    onClick={() => navigate("/checkout")}
+    className="relative p-2 rounded-full hover:bg-white/10 transition"
+    title={hasItems ? `Cart (${formatTimeRemaining()} left)` : "Cart"}
+  >
+    <ShoppingCart className="w-6 h-6" />
+    {itemCount > 0 && (
+      <span className={`absolute -top-1 -right-1 w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center ${
+        isExpiringSoon() ? 'bg-red-500 animate-pulse' : 'bg-primary'
+      } text-black`}>
+        {itemCount}
+      </span>
+    )}
+  </button>
 
   {!user ? (
     <button

@@ -1,15 +1,29 @@
 import React, { useEffect, useState } from "react";
 import { Calendar } from "lucide-react";
 
+const API_BASE = "http://localhost:5000/api";
+
+const formatDate = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
+
+const formatPrice = (price) => {
+  if (!price) return '0';
+  return new Intl.NumberFormat('vi-VN').format(price);
+};
+
 const SportPage = () => {
   const [sportItems, setSportItems] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("http://localhost:5000/events")
+    fetch(`${API_BASE}/concerts`)
       .then((res) => res.json())
-      .then((data) => {
-        const sports = data.filter((e) => e.category === "sport");
+      .then((response) => {
+        const concerts = response.data?.concerts || response.data || response.concerts || [];
+        const sports = concerts.filter((e) => e.category === "sport");
         setTimeout(() => { // delay để skeleton hiển thị
           setSportItems(sports);
           setLoading(false);
@@ -54,21 +68,21 @@ const SportPage = () => {
                 className="bg-gray-900 rounded-lg shadow-md overflow-hidden cursor-pointer"
               >
                 <img
-                  src={item.image}
-                  alt={item.name}
+                  src={item.thumbnail}
+                  alt={item.title}
                   className="w-full h-60 sm:h-72 md:h-60 object-cover rounded-lg mb-4"
                 />
                 <div className="px-3 mb-4">
                   <h3 className="text-lg font-bold text-white line-clamp-1 truncate">
-                    {item.name}
+                    {item.title}
                   </h3>
                 </div>
                 <div className="flex items-center justify-between text-gray-400 px-3 pb-3">
                   <div className="flex items-center">
                     <Calendar className="w-4 h-4 mr-2" />
-                    <span>{item.date}</span>
+                    <span>{formatDate(item.start_time)}</span>
                   </div>
-                  <p className="text-primary font-bold">{item.price_set?.toLocaleString()}đ</p>
+                  <p className="text-primary font-bold">{formatPrice(item.base_price)}đ</p>
                 </div>
               </div>
             ))}

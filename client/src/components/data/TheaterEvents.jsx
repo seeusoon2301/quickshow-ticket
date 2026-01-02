@@ -3,15 +3,29 @@ import { motion } from "framer-motion";
 import { ArrowRight, Calendar } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
+const API_BASE = "http://localhost:5000/api";
+
+const formatDate = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
+
+const formatPrice = (price) => {
+  if (!price) return '0';
+  return new Intl.NumberFormat('vi-VN').format(price);
+};
+
 const TheaterEvents = () => {
   const [theaterEvents, setTheaterEvents] = useState([]);
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetch("http://localhost:5000/events")
+    fetch(`${API_BASE}/concerts`)
       .then((res) => res.json())
-      .then((data) => {
-        const theater = data.filter((e) => e.category === "theater");
+      .then((response) => {
+        const concerts = response.data?.concerts || response.data || response.concerts || [];
+        const theater = concerts.filter((e) => e.category === "theater");
         setTheaterEvents(theater);
       })
       .catch((err) => console.error("❌ Lỗi khi lấy dữ liệu:", err));
@@ -49,21 +63,21 @@ const TheaterEvents = () => {
             className="bg-[rgb(37,36,36)] rounded-lg shadow-md overflow-hidden cursor-pointer transform transition-all duration-300 hover:scale-105 flex flex-col justify-between h-full"
           >
             <img
-              src={card.image}
-              alt={card.name}
+              src={card.thumbnail}
+              alt={card.title}
               className="w-full h-48 sm:h-60 md:h-60 object-cover rounded-lg mb-4"
             />
             <div className="flex justify-between items-center mb-4 px-3">
               <h3 className="text-base md:text-lg font-bold text-white">
-                {card.name}
+                {card.title}
               </h3>
             </div>
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between text-white px-3 pb-3 text-sm md:text-base gap-1">
               <div className="flex items-center">
                 <Calendar className="w-4 h-4 mr-2" />
-                <span>{card.date}</span>
+                <span>{formatDate(card.start_time)}</span>
               </div>
-              <p className="text-primary font-bold">{card.price_set}đ</p>
+              <p className="text-primary font-bold">{formatPrice(card.base_price)}đ</p>
             </div>
           </div>
         ))}

@@ -1,35 +1,68 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Calendar, MapPin, Clock } from "lucide-react";
+import { Calendar, MapPin, Clock, Users, Share2, Heart, ShoppingCart, Check } from "lucide-react";
+import { useUser, useClerk } from "@clerk/clerk-react";
+import { useCart } from "../context/CartContext";
+import SeatSelection from "../components/SeatSelection";
+import toast from "react-hot-toast";
+
+const API_BASE = "http://localhost:5000/api";
+
+const formatDate = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
+
+const formatTime = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+};
+
+const formatPrice = (price) => {
+  if (!price) return '0';
+  return new Intl.NumberFormat('vi-VN').format(price);
+};
 
 const EventDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user, isSignedIn } = useUser();
+  const { openSignIn } = useClerk();
+  const { addToCart, cartItems } = useCart();
+  
   const [event, setEvent] = useState(null);
   const [recommended, setRecommended] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [quantity, setQuantity] = useState(1);
+  const [showSeatSelection, setShowSeatSelection] = useState(false);
+  const [isWishlisted, setIsWishlisted] = useState(false);
+  const [addedToCart, setAddedToCart] = useState(false);
 
   useEffect(() => {
-    // Try fetching single event by id, fallback to fetching all
+    // Fetch single concert by id
     const fetchEvent = async () => {
       try {
-        const res = await fetch(`http://localhost:5000/events/${id}`);
+        const res = await fetch(`${API_BASE}/concerts/${id}`);
         if (res.ok) {
-          const data = await res.json();
-          setEvent(data);
+          const response = await res.json();
+          const concert = response.data || response;
+          setEvent(concert);
         } else {
           // fallback to all
-          const r2 = await fetch("http://localhost:5000/events");
-          const all = await r2.json();
+          const r2 = await fetch(`${API_BASE}/concerts`);
+          const allData = await r2.json();
+          const all = allData.data?.concerts || allData.data || allData.concerts || [];
           const found = all.find((e) => e._id === id || e.id === id);
           setEvent(found || all[0]);
         }
 
         // recommended: fetch all and pick random 4
-        const r = await fetch("http://localhost:5000/events");
-        const allEvents = await r.json();
+        const r = await fetch(`${API_BASE}/concerts`);
+        const allEventsData = await r.json();
+        const allEvents = allEventsData.data?.concerts || allEventsData.data || allEventsData.concerts || [];
         const others = allEvents.filter((e) => e._id !== id && e._id !== (event && event._id));
         // shuffle
         for (let i = others.length - 1; i > 0; i--) {
@@ -49,16 +82,99 @@ const EventDetail = () => {
   }, [id]);
 
   useEffect(() => {
-    if (event && event.tickets && event.tickets.length > 0) {
-      setSelectedTicket(event.tickets[0]);
+    if (event && event.ticket_classes && event.ticket_classes.length > 0) {
+      setSelectedTicket(event.ticket_classes[0]);
     }
   }, [event]);
 
   const handleBuy = () => {
-    if (!selectedTicket && !event) return;
-    const price = selectedTicket ? selectedTicket.price : event.price_set || 0;
-    const total = price * quantity;
-    alert(`Buying ${quantity} x ${selectedTicket ? selectedTicket.seatType : "General"} - Total: ${total}đ`);
+    if (!isSignedIn) {
+      openSignIn();
+      return;
+    }
+    
+    // If event has seat selection, show seat map
+    if (event.hasSeats || event.ticket_classes?.some(t => t.hasSeats)) {
+      setShowSeatSelection(true);
+      return;
+    }
+    
+    // Otherwise go directly to checkout
+    const ticketClass = selectedTicket || { name: "General", price: event.base_price || 0 };
+    navigate("/checkout", {
+      state: {
+        event,
+        ticketClass,
+        quantity,
+        selectedSeats: null,
+      },
+    });
+  };
+
+  const handleSeatSelect = (selectedSeats) => {
+    setShowSeatSelection(false);
+    const ticketClass = selectedTicket || { name: "General", price: event.base_price || 0 };
+    navigate("/checkout", {
+      state: {
+        event,
+        ticketClass,
+        quantity: selectedSeats.length,
+        selectedSeats,
+      },
+    });
+  };
+
+  const handleShare = async () => {
+    try {
+      await navigator.share({
+        title: event.title,
+        text: `Check out this event: ${event.title}`,
+        url: window.location.href,
+      });
+    } catch (err) {
+      // Fallback: copy to clipboard
+      navigator.clipboard.writeText(window.location.href);
+      alert("Link copied to clipboard!");
+    }
+  };
+
+  const toggleWishlist = () => {
+    if (!isSignedIn) {
+      openSignIn();
+      return;
+    }
+    setIsWishlisted(!isWishlisted);
+    // TODO: Call API to save wishlist
+  };
+
+  const handleAddToCart = () => {
+    if (!isSignedIn) {
+      openSignIn();
+      return;
+    }
+
+    const ticketClass = selectedTicket || { 
+      _id: 'general', 
+      name: "General Admission", 
+      price: event.base_price || 0 
+    };
+
+    addToCart({
+      eventId: event._id,
+      eventTitle: event.title,
+      eventThumbnail: event.thumbnail,
+      eventDate: event.start_time,
+      eventVenue: event.venue?.name || event.venue || "TBA",
+      ticketClassId: ticketClass._id || ticketClass.name,
+      ticketClassName: ticketClass.name,
+      price: ticketClass.price,
+      quantity,
+    });
+
+    setAddedToCart(true);
+    toast.success(`Added ${quantity} ticket(s) to cart!`);
+    
+    setTimeout(() => setAddedToCart(false), 2000);
   };
 
   if (loading) return <div className="px-6 md:px-16 pt-32 text-white">Loading...</div>;
@@ -70,13 +186,13 @@ const EventDetail = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <div className="md:col-span-2">
           <div className="rounded-xl overflow-hidden">
-            <img src={event.image} alt={event.name} className="w-full h-72 object-cover rounded-lg" />
+            <img src={event.thumbnail} alt={event.title} className="w-full h-72 object-cover rounded-lg" />
             <div className="mt-5">
-              <h1 className="text-3xl md:text-4xl font-bold">{event.name}</h1>
+              <h1 className="text-3xl md:text-4xl font-bold">{event.title}</h1>
               <div className="flex items-center gap-4 mt-3 text-gray-300">
-                <div className="flex items-center gap-2"><Calendar className="w-4 h-4" />{event.date}</div>
-                <div className="flex items-center gap-2"><Clock className="w-4 h-4" />{event.time || "TBA"}</div>
-                <div className="flex items-center gap-2"><MapPin className="w-4 h-4" />{event.place || event.venue || "Unknown place"}</div>
+                <div className="flex items-center gap-2"><Calendar className="w-4 h-4" />{formatDate(event.start_time)}</div>
+                <div className="flex items-center gap-2"><Clock className="w-4 h-4" />{formatTime(event.start_time) || "TBA"}</div>
+                <div className="flex items-center gap-2"><MapPin className="w-4 h-4" />{event.venue?.name || event.venue || "Unknown place"}</div>
               </div>
             </div>
           </div>
@@ -85,7 +201,7 @@ const EventDetail = () => {
           <section className="mt-8 bg-[rgb(37,36,36)] p-6 rounded-lg">
             <h2 className="text-xl font-semibold mb-3">Introduction</h2>
             <p className="text-gray-300 leading-relaxed">
-              {event.description || event.intro || "No description provided for this event."}
+              {event.description || "No description provided for this event."}
             </p>
           </section>
 
@@ -129,33 +245,107 @@ const EventDetail = () => {
         {/* Right column: tickets & organizer */}
         <aside className="md:col-span-1">
           <div className="bg-[rgb(37,36,36)] p-6 rounded-lg">
-            <h3 className="text-xl font-semibold">Tickets</h3>
-            <p className="text-gray-400 mt-2">Select ticket type and quantity</p>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-semibold">Tickets</h3>
+              <div className="flex gap-2">
+                <button 
+                  onClick={toggleWishlist}
+                  className={`p-2 rounded-full transition ${isWishlisted ? 'bg-primary text-black' : 'bg-white/10 hover:bg-white/20'}`}
+                  title="Add to Wishlist"
+                >
+                  <Heart className={`w-5 h-5 ${isWishlisted ? 'fill-current' : ''}`} />
+                </button>
+                <button 
+                  onClick={handleShare}
+                  className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition"
+                  title="Share"
+                >
+                  <Share2 className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            <p className="text-gray-400">Select ticket type and quantity</p>
 
             <div className="mt-4 space-y-3">
-              {event.tickets && event.tickets.length > 0 ? (
+              {event.ticket_classes && event.ticket_classes.length > 0 ? (
                 <select
-                  value={selectedTicket ? selectedTicket.seatType : ""}
+                  value={selectedTicket ? selectedTicket.name : ""}
                   onChange={(e) => {
-                    const t = event.tickets.find((t) => t.seatType === e.target.value);
+                    const t = event.ticket_classes.find((t) => t.name === e.target.value);
                     setSelectedTicket(t);
                   }}
-                  className="w-full p-2 rounded bg-black/30"
+                  className="w-full p-3 rounded-lg bg-black/30 border border-gray-700 focus:border-primary focus:outline-none"
                 >
-                  {event.tickets.map((t) => (
-                    <option key={t.seatType} value={t.seatType}>{`${t.seatType} - ${t.price}đ (${t.available} left)`}</option>
+                  {event.ticket_classes.map((t) => (
+                    <option key={t.name} value={t.name}>{`${t.name} - ${formatPrice(t.price)}đ (${t.quota - t.sold_qty} left)`}</option>
                   ))}
                 </select>
               ) : (
-                <div className="text-gray-300">From {event.price_set}đ</div>
+                <div className="text-2xl font-bold text-primary">
+                  From {formatPrice(event.base_price)}đ
+                </div>
               )}
 
-              <div className="flex items-center gap-3">
-                <label className="text-gray-300">Qty</label>
-                <input type="number" min={1} max={10} value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} className="w-20 p-2 rounded bg-black/30" />
+              <div className="flex items-center justify-between py-3 border-t border-gray-700">
+                <label className="text-gray-300">Quantity</label>
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                    className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center hover:bg-gray-600"
+                  >
+                    -
+                  </button>
+                  <span className="w-8 text-center font-semibold">{quantity}</span>
+                  <button 
+                    onClick={() => setQuantity(Math.min(10, quantity + 1))}
+                    className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center hover:bg-gray-600"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
 
-              <button onClick={handleBuy} className="w-full mt-2 bg-primary text-black font-semibold px-4 py-2 rounded">Buy Ticket</button>
+              <button 
+                onClick={handleBuy} 
+                className="w-full py-3 bg-primary text-black font-bold text-lg rounded-lg hover:bg-primary-dull transition"
+              >
+                {isSignedIn ? 'Buy Now' : 'Sign in to Buy'}
+              </button>
+
+              <button 
+                onClick={handleAddToCart}
+                disabled={addedToCart}
+                className={`w-full py-3 font-semibold rounded-lg transition flex items-center justify-center gap-2 ${
+                  addedToCart 
+                    ? 'bg-green-600 text-white' 
+                    : 'bg-white/10 text-white hover:bg-white/20'
+                }`}
+              >
+                {addedToCart ? (
+                  <>
+                    <Check className="w-5 h-5" /> Added to Cart
+                  </>
+                ) : (
+                  <>
+                    <ShoppingCart className="w-5 h-5" /> Add to Cart
+                  </>
+                )}
+              </button>
+              
+              {event.hasSeats && (
+                <button 
+                  onClick={() => {
+                    if (!isSignedIn) {
+                      openSignIn();
+                      return;
+                    }
+                    setShowSeatSelection(true);
+                  }}
+                  className="w-full py-3 bg-white/10 text-white font-semibold rounded-lg hover:bg-white/20 transition"
+                >
+                  Select Seats
+                </button>
+              )}
             </div>
           </div>
 
@@ -172,16 +362,32 @@ const EventDetail = () => {
         </aside>
       </div>
 
+      {/* Seat Selection Modal */}
+      {showSeatSelection && (
+        <SeatSelection
+          concert={event}
+          zones={event.zones || [
+            { name: "VIP", price: 2500000 },
+            { name: "Zone A", price: 1500000 },
+            { name: "Zone B", price: 800000 },
+          ]}
+          ticketClasses={event.ticket_classes}
+          onSelect={handleSeatSelect}
+          onClose={() => setShowSeatSelection(false)}
+          maxSeats={10}
+        />
+      )}
+
       {/* Recommended */}
       <section className="mt-10">
         <h3 className="text-2xl font-semibold mb-4">Recommended Events</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {recommended.map((rec) => (
             <div key={rec._id} onClick={() => navigate(`/event/${rec._id}`)} className="bg-[rgb(37,36,36)] rounded-lg overflow-hidden cursor-pointer">
-              <img src={rec.image} className="w-full h-36 object-cover" />
+              <img src={rec.thumbnail} className="w-full h-36 object-cover" />
               <div className="p-3">
-                <div className="font-semibold line-clamp-2">{rec.name}</div>
-                <div className="text-sm text-gray-400 mt-2">{rec.date} • {rec.price_set}đ</div>
+                <div className="font-semibold line-clamp-2">{rec.title}</div>
+                <div className="text-sm text-gray-400 mt-2">{formatDate(rec.start_time)} • {formatPrice(rec.base_price)}đ</div>
               </div>
             </div>
           ))}
