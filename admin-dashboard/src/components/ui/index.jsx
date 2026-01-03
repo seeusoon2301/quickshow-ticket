@@ -3,6 +3,8 @@
  * Consolidates common UI patterns across pages
  */
 
+import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Loader2, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 
 // ========================
@@ -71,7 +73,7 @@ export const SearchInput = ({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="w-full pl-10 pr-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-[#F84565] transition-colors"
+      className="w-full pl-10 pr-4 py-2 bg-zinc-800 border border-white/10 rounded-lg focus:outline-none focus:border-[#F84565] transition-colors text-white placeholder:text-gray-500"
     />
   </div>
 );
@@ -84,18 +86,22 @@ export const Select = ({
   onChange, 
   options, 
   placeholder,
+  label,
   className = '' 
 }) => (
-  <select
-    value={value}
-    onChange={(e) => onChange(e.target.value)}
-    className={`px-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-[#F84565] transition-colors ${className}`}
-  >
-    {placeholder && <option value="">{placeholder}</option>}
-    {options.map((opt) => (
-      <option key={opt.value} value={opt.value}>{opt.label}</option>
-    ))}
-  </select>
+  <div className={`relative ${className}`}>
+    {label && <label className="block text-sm text-gray-400 mb-1">{label}</label>}
+    <select
+      value={value}
+      onChange={onChange}
+      className="w-full px-4 py-2 bg-zinc-800 border border-white/10 rounded-lg focus:outline-none focus:border-[#F84565] transition-colors text-white [&>option]:bg-zinc-800 [&>option]:text-white relative z-10"
+    >
+      {placeholder && <option value="">{placeholder}</option>}
+      {options.map((opt) => (
+        <option key={opt.value} value={opt.value}>{opt.label}</option>
+      ))}
+    </select>
+  </div>
 );
 
 // ========================
@@ -121,9 +127,9 @@ export const Input = ({
     <input
       type={type}
       value={value}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={onChange}
       placeholder={placeholder}
-      className={`w-full px-4 py-2 bg-white/5 border rounded-lg focus:outline-none transition-colors ${
+      className={`w-full px-4 py-2 bg-zinc-800 border rounded-lg focus:outline-none transition-colors text-white placeholder:text-gray-500 ${
         error ? 'border-red-500 focus:border-red-500' : 'border-white/10 focus:border-[#F84565]'
       }`}
       {...props}
@@ -148,10 +154,10 @@ export const Textarea = ({
     {label && <label className="block text-sm text-gray-400 mb-1">{label}</label>}
     <textarea
       value={value}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={onChange}
       placeholder={placeholder}
       rows={rows}
-      className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-[#F84565] transition-colors resize-none"
+      className="w-full px-4 py-2 bg-zinc-800 border border-white/10 rounded-lg focus:outline-none focus:border-[#F84565] transition-colors resize-none text-white placeholder:text-gray-500"
       {...props}
     />
   </div>
@@ -208,7 +214,7 @@ export const Card = ({
   action,
   className = '' 
 }) => (
-  <div className={`bg-zinc-900 rounded-xl border border-white/10 ${className}`}>
+  <div className={`bg-zinc-900 rounded-xl border border-white/10 overflow-visible ${className}`}>
     {(title || action) && (
       <div className="p-5 border-b border-white/10 flex items-center justify-between">
         <div>
@@ -292,29 +298,39 @@ export const Badge = ({
 // ========================
 export const Pagination = ({ 
   page, 
-  pages, 
+  pages,
+  totalPages, 
   total,
   onPageChange,
   className = '' 
 }) => {
-  if (pages <= 1) return null;
+  const totalPagesValue = totalPages || pages;
+  if (totalPagesValue <= 1) return null;
+
+  const handlePageChange = (newPage, e) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    onPageChange(newPage);
+  };
 
   return (
-    <div className={`flex items-center justify-between ${className}`}>
+    <div className={`flex items-center justify-between p-4 ${className}`}>
       <p className="text-sm text-gray-400">
-        Page {page} of {pages} ({total} items)
+        Page {page} of {totalPagesValue} {total ? `(${total} items)` : ''}
       </p>
       <div className="flex gap-2">
         <button
-          onClick={() => onPageChange(page - 1)}
+          type="button"
+          onClick={(e) => handlePageChange(page - 1, e)}
           disabled={page === 1}
           className="p-2 bg-white/10 hover:bg-white/20 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           <ChevronLeft className="w-4 h-4" />
         </button>
         <button
-          onClick={() => onPageChange(page + 1)}
-          disabled={page >= pages}
+          type="button"
+          onClick={(e) => handlePageChange(page + 1, e)}
+          disabled={page >= totalPagesValue}
           className="p-2 bg-white/10 hover:bg-white/20 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           <ChevronRight className="w-4 h-4" />
@@ -515,3 +531,110 @@ export const Tabs = ({
     ))}
   </div>
 );
+
+// ========================
+// Action Menu (Portal-based dropdown with fixed positioning)
+// ========================
+export const ActionMenu = ({ 
+  isOpen, 
+  onClose, 
+  items,
+  buttonRef,
+  className = '' 
+}) => {
+  const menuRef = useRef(null);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
+
+  // Calculate position when menu opens
+  useEffect(() => {
+    if (isOpen && buttonRef?.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      const menuWidth = 176; // w-44 = 11rem = 176px
+      const menuHeight = items.length * 44 + 8;
+      
+      let top = rect.bottom + 4;
+      let left = rect.right - menuWidth;
+      
+      // Adjust if menu would go off screen bottom
+      if (top + menuHeight > window.innerHeight) {
+        top = rect.top - menuHeight - 4;
+      }
+      
+      // Adjust if menu would go off screen left
+      if (left < 8) {
+        left = 8;
+      }
+      
+      setPosition({ top, left });
+    }
+  }, [isOpen, buttonRef, items.length]);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target) && 
+          buttonRef?.current && !buttonRef.current.contains(e.target)) {
+        onClose();
+      }
+    };
+    
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+
+    const handleScroll = () => {
+      onClose();
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    window.addEventListener('scroll', handleScroll, true);
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+      window.removeEventListener('scroll', handleScroll, true);
+    };
+  }, [isOpen, onClose, buttonRef]);
+
+  if (!isOpen) return null;
+
+  const menu = (
+    <div 
+      ref={menuRef}
+      style={{
+        position: 'fixed',
+        top: position.top,
+        left: position.left,
+        zIndex: 9999,
+      }}
+      className={`w-44 bg-zinc-800 rounded-xl shadow-2xl border border-white/10 overflow-hidden py-1 ${className}`}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {items.map((item, idx) => (
+        <button
+          key={idx}
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onClose();
+            item.onClick();
+          }}
+          className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm transition-colors ${
+            item.variant === 'danger' 
+              ? 'text-red-400 hover:bg-red-500/10' 
+              : 'text-gray-300 hover:bg-white/10'
+          }`}
+        >
+          {item.icon && <item.icon size={14} />}
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+
+  return createPortal(menu, document.body);
+};

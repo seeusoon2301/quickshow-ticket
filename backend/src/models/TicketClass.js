@@ -1,8 +1,9 @@
 import mongoose from 'mongoose';
 
 /**
- * TicketClass Model - Defines ticket pricing for a concert
- * E.g., Early Bird, VIP, Standard, etc.
+ * TicketClass Model - Defines ticket pricing tiers for a concert
+ * E.g., VIP, Standard, Economy, etc.
+ * Seats are "painted" with ticket classes via ShowSeat
  */
 const ticketClassSchema = new mongoose.Schema({
   concert: {
@@ -10,15 +11,14 @@ const ticketClassSchema = new mongoose.Schema({
     ref: 'Concert',
     required: true
   },
-  zone: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Zone',
-    required: true
-  },
   name: {
     type: String,
     required: true,
-    trim: true // Early Bird, VIP, Standard, etc.
+    trim: true // VIP, Standard, Economy, etc.
+  },
+  color: {
+    type: String,
+    default: '#3B82F6' // Color for seat map display
   },
   price: {
     type: Number,
@@ -27,8 +27,8 @@ const ticketClassSchema = new mongoose.Schema({
   },
   quota: {
     type: Number,
-    required: true,
-    min: 0 // Total tickets available for this class
+    default: 0, // Will be calculated from assigned seats
+    min: 0
   },
   sold_qty: {
     type: Number,
@@ -42,12 +42,16 @@ const ticketClassSchema = new mongoose.Schema({
     type: Date // When ticket sales end
   },
   description: String,
-  benefits: [String] // VIP lounge access, Meet & greet, etc.
+  benefits: [String], // VIP lounge access, Meet & greet, etc.
+  sortOrder: {
+    type: Number,
+    default: 0 // For display ordering
+  }
 }, { timestamps: true });
 
 // Index
-ticketClassSchema.index({ concert: 1, zone: 1 });
-ticketClassSchema.index({ concert: 1, name: 1 });
+ticketClassSchema.index({ concert: 1 });
+ticketClassSchema.index({ concert: 1, name: 1 }, { unique: true });
 
 // Virtual: available quantity
 ticketClassSchema.virtual('available_qty').get(function() {

@@ -1,11 +1,15 @@
 import Venue from '../models/Venue.js';
-import Zone from '../models/Zone.js';
 import Seat from '../models/Seat.js';
 import { ApiError } from '../middleware/errorHandler.js';
 
 /**
  * Venue Controller
- * Handles venue and seating management
+ * Handles venue and seat layout management
+ * 
+ * NEW STRUCTURE:
+ * - Venues contain Seats directly (no zones)
+ * - Seats are physical layout templates
+ * - TicketClasses and seat "painting" are handled per event via ShowSeat
  */
 
 /**
@@ -20,7 +24,10 @@ export const getVenues = async (req, res, next) => {
     const query = {};
 
     if (search) {
-      query.$text = { $search: search };
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { city: { $regex: search, $options: 'i' } }
+      ];
     }
 
     if (city) {
@@ -37,10 +44,21 @@ export const getVenues = async (req, res, next) => {
       Venue.countDocuments(query)
     ]);
 
+    // Add seat count to each venue
+    const venuesWithSeats = await Promise.all(
+      venues.map(async (venue) => {
+        const seatCount = await Seat.countDocuments({ venue: venue._id });
+        return {
+          ...venue.toObject(),
+          seatCount
+        };
+      })
+    );
+
     res.json({
       success: true,
       data: {
-        venues,
+        venues: venuesWithSeats,
         pagination: {
           page: parseInt(page),
           limit: parseInt(limit),
@@ -55,7 +73,7 @@ export const getVenues = async (req, res, next) => {
 };
 
 /**
- * @desc    Get single venue with zones and seats
+ * @desc    Get single venue with seats
  * @route   GET /api/venues/:id
  * @access  Public
  */
@@ -67,25 +85,15 @@ export const getVenueById = async (req, res, next) => {
       throw new ApiError(404, 'Venue not found');
     }
 
-    // Get zones
-    const zones = await Zone.find({ venue: venue._id });
-
-    // Get seat count per zone
-    const zoneWithSeats = await Promise.all(
-      zones.map(async (zone) => {
-        const seatCount = await Seat.countDocuments({ zone: zone._id });
-        return {
-          ...zone.toObject(),
-          seatCount
-        };
-      })
-    );
+    const seatCount = await Seat.countDocuments({ venue: venue._id });
 
     res.json({
       success: true,
       data: {
-        venue,
-        zones: zoneWithSeats
+        venue: {
+          ...venue.toObject(),
+          seatCount
+        }
       }
     });
   } catch (error) {
@@ -152,7 +160,7 @@ export const updateVenue = async (req, res, next) => {
 };
 
 /**
- * @desc    Delete venue
+ * @desc    Delete venue and all its seats
  * @route   DELETE /api/venues/:id
  * @access  Admin
  */
@@ -164,15 +172,13 @@ export const deleteVenue = async (req, res, next) => {
       throw new ApiError(404, 'Venue not found');
     }
 
-    // Delete all related zones and seats
-    const zones = await Zone.find({ venue: venue._id });
-    await Seat.deleteMany({ zone: { $in: zones.map(z => z._id) } });
-    await Zone.deleteMany({ venue: venue._id });
+    // Delete all seats belonging to this venue
+    await Seat.deleteMany({ venue: venue._id });
     await Venue.findByIdAndDelete(req.params.id);
 
     res.json({
       success: true,
-      message: 'Venue and all related data deleted successfully'
+      message: 'Venue and all seats deleted successfully'
     });
   } catch (error) {
     next(error);
@@ -180,11 +186,11 @@ export const deleteVenue = async (req, res, next) => {
 };
 
 /**
- * @desc    Create zone for venue
- * @route   POST /api/venues/:id/zones
- * @access  Admin
+ * @desc    Get all seats for a venue
+ * @route   GET /api/venues/:id/seats
+ * @access  Public
  */
-export const createZone = async (req, res, next) => {
+export const getVenueSeats = async (req, res, next) => {
   try {
     const venue = await Venue.findById(req.params.id);
 
@@ -192,161 +198,9 @@ export const createZone = async (req, res, next) => {
       throw new ApiError(404, 'Venue not found');
     }
 
-    const { name, capacity, color, description } = req.body;
+    const seats = await Seat.find({ venue: venue._id }).sort({ row: 1, number: 1 });
 
-    const zone = await Zone.create({
-      venue: venue._id,
-      name,
-      capacity,
-      color,
-      description
-    });
-
-    res.status(201).json({
-      success: true,
-      message: 'Zone created successfully',
-      data: zone
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * @desc    Update zone
- * @route   PUT /api/venues/:venueId/zones/:zoneId
- * @access  Admin
- */
-export const updateZone = async (req, res, next) => {
-  try {
-    const zone = await Zone.findOneAndUpdate(
-      { _id: req.params.zoneId, venue: req.params.venueId },
-      req.body,
-      { new: true, runValidators: true }
-    );
-
-    if (!zone) {
-      throw new ApiError(404, 'Zone not found');
-    }
-
-    res.json({
-      success: true,
-      message: 'Zone updated successfully',
-      data: zone
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * @desc    Delete zone
- * @route   DELETE /api/venues/:venueId/zones/:zoneId
- * @access  Admin
- */
-export const deleteZone = async (req, res, next) => {
-  try {
-    const zone = await Zone.findOne({
-      _id: req.params.zoneId,
-      venue: req.params.venueId
-    });
-
-    if (!zone) {
-      throw new ApiError(404, 'Zone not found');
-    }
-
-    // Delete all seats in zone
-    await Seat.deleteMany({ zone: zone._id });
-    await Zone.findByIdAndDelete(zone._id);
-
-    res.json({
-      success: true,
-      message: 'Zone and all seats deleted successfully'
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * @desc    Generate seats for zone
- * @route   POST /api/venues/:venueId/zones/:zoneId/generate-seats
- * @access  Admin
- */
-export const generateSeats = async (req, res, next) => {
-  try {
-    const zone = await Zone.findOne({
-      _id: req.params.zoneId,
-      venue: req.params.venueId
-    });
-
-    if (!zone) {
-      throw new ApiError(404, 'Zone not found');
-    }
-
-    const { rows, seatsPerRow, startRow = 'A' } = req.body;
-
-    if (!rows || !seatsPerRow) {
-      throw new ApiError(400, 'Please provide rows and seatsPerRow');
-    }
-
-    // Delete existing seats
-    await Seat.deleteMany({ zone: zone._id });
-
-    // Generate new seats
-    const seats = [];
-    const startCharCode = startRow.charCodeAt(0);
-
-    for (let r = 0; r < rows; r++) {
-      const row = String.fromCharCode(startCharCode + r);
-      for (let n = 1; n <= seatsPerRow; n++) {
-        seats.push({
-          zone: zone._id,
-          row,
-          number: n,
-          type: 'NORMAL'
-        });
-      }
-    }
-
-    await Seat.insertMany(seats);
-
-    // Update zone capacity
-    zone.capacity = seats.length;
-    await zone.save();
-
-    res.json({
-      success: true,
-      message: `Generated ${seats.length} seats successfully`,
-      data: {
-        zone,
-        seatCount: seats.length
-      }
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * @desc    Get seats for zone
- * @route   GET /api/venues/:venueId/zones/:zoneId/seats
- * @access  Public
- */
-export const getZoneSeats = async (req, res, next) => {
-  try {
-    const zone = await Zone.findOne({
-      _id: req.params.zoneId,
-      venue: req.params.venueId
-    });
-
-    if (!zone) {
-      throw new ApiError(404, 'Zone not found');
-    }
-
-    const seats = await Seat.find({ zone: zone._id }).sort({ row: 1, number: 1 });
-
-    // Group by row
+    // Group by row for easier rendering
     const seatsByRow = seats.reduce((acc, seat) => {
       if (!acc[seat.row]) acc[seat.row] = [];
       acc[seat.row].push(seat);
@@ -356,12 +210,320 @@ export const getZoneSeats = async (req, res, next) => {
     res.json({
       success: true,
       data: {
-        zone,
+        venue: {
+          _id: venue._id,
+          name: venue.name,
+          total_capacity: venue.total_capacity
+        },
+        seats,
         seatsByRow,
         totalSeats: seats.length
       }
     });
   } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Save all seats for a venue (replace existing)
+ * @route   PUT /api/venues/:id/seats
+ * @access  Admin
+ */
+export const saveVenueSeats = async (req, res, next) => {
+  try {
+    const venue = await Venue.findById(req.params.id);
+
+    if (!venue) {
+      throw new ApiError(404, 'Venue not found');
+    }
+
+    const { seats: newSeats } = req.body;
+
+    if (!newSeats || !Array.isArray(newSeats)) {
+      throw new ApiError(400, 'Please provide seats array');
+    }
+
+    // Validate against venue capacity
+    if (newSeats.length > venue.total_capacity) {
+      throw new ApiError(400, 
+        `Cannot save ${newSeats.length} seats. ` +
+        `Exceeds venue capacity of ${venue.total_capacity}.`
+      );
+    }
+
+    // Delete all existing seats
+    await Seat.deleteMany({ venue: venue._id });
+
+    // Insert new seats if any
+    let insertedSeats = [];
+    if (newSeats.length > 0) {
+      const seatsToInsert = newSeats.map(s => ({
+        venue: venue._id,
+        row: s.row,
+        number: s.number,
+        label: s.label || `${s.row}${s.number}`,
+        seatType: s.seatType || 'NORMAL',
+        isActive: s.isActive !== false,
+        x: s.x || 0,
+        y: s.y || 0,
+        rotation: s.rotation || 0
+      }));
+
+      insertedSeats = await Seat.insertMany(seatsToInsert);
+    }
+
+    res.json({
+      success: true,
+      message: `Saved ${insertedSeats.length} seats`,
+      data: { 
+        seatCount: insertedSeats.length,
+        venueCapacity: venue.total_capacity,
+        remainingCapacity: venue.total_capacity - insertedSeats.length
+      }
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      throw new ApiError(400, 'Duplicate seat detected (same row and number)');
+    }
+    next(error);
+  }
+};
+
+/**
+ * @desc    Add seats to venue
+ * @route   POST /api/venues/:id/seats
+ * @access  Admin
+ */
+export const addSeats = async (req, res, next) => {
+  try {
+    const venue = await Venue.findById(req.params.id);
+
+    if (!venue) {
+      throw new ApiError(404, 'Venue not found');
+    }
+
+    const { seats: newSeats } = req.body;
+
+    if (!newSeats || !Array.isArray(newSeats) || newSeats.length === 0) {
+      throw new ApiError(400, 'Please provide seats array');
+    }
+
+    // Check current seat count
+    const currentSeatCount = await Seat.countDocuments({ venue: venue._id });
+    const newTotalSeats = currentSeatCount + newSeats.length;
+
+    if (newTotalSeats > venue.total_capacity) {
+      const remaining = venue.total_capacity - currentSeatCount;
+      throw new ApiError(400, 
+        `Cannot add ${newSeats.length} seats. ` +
+        `Only ${remaining} seats can be added (current: ${currentSeatCount}, capacity: ${venue.total_capacity}).`
+      );
+    }
+
+    const seatsToInsert = newSeats.map(s => ({
+      venue: venue._id,
+      row: s.row,
+      number: s.number,
+      label: s.label || `${s.row}${s.number}`,
+      seatType: s.seatType || 'NORMAL',
+      isActive: s.isActive !== false,
+      x: s.x || 0,
+      y: s.y || 0,
+      rotation: s.rotation || 0
+    }));
+
+    const insertedSeats = await Seat.insertMany(seatsToInsert, { ordered: false });
+
+    res.status(201).json({
+      success: true,
+      message: `Added ${insertedSeats.length} seats`,
+      data: { 
+        insertedCount: insertedSeats.length,
+        totalSeats: newTotalSeats,
+        venueCapacity: venue.total_capacity
+      }
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      throw new ApiError(400, 'Some seats already exist (duplicate row/number)');
+    }
+    next(error);
+  }
+};
+
+/**
+ * @desc    Delete specific seats
+ * @route   DELETE /api/venues/:id/seats
+ * @access  Admin
+ */
+export const deleteSeats = async (req, res, next) => {
+  try {
+    const { seatIds } = req.body;
+
+    if (!seatIds || !Array.isArray(seatIds) || seatIds.length === 0) {
+      throw new ApiError(400, 'Please provide seatIds array');
+    }
+
+    const result = await Seat.deleteMany({
+      _id: { $in: seatIds },
+      venue: req.params.id
+    });
+
+    res.json({
+      success: true,
+      message: `Deleted ${result.deletedCount} seats`,
+      data: { deletedCount: result.deletedCount }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Update seat properties
+ * @route   PUT /api/venues/:id/seats/:seatId
+ * @access  Admin
+ */
+export const updateSeat = async (req, res, next) => {
+  try {
+    const { seatType, isActive, x, y, rotation, label } = req.body;
+    
+    const seat = await Seat.findOneAndUpdate(
+      { _id: req.params.seatId, venue: req.params.id },
+      { seatType, isActive, x, y, rotation, label },
+      { new: true, runValidators: true }
+    );
+
+    if (!seat) {
+      throw new ApiError(404, 'Seat not found');
+    }
+
+    res.json({
+      success: true,
+      message: 'Seat updated successfully',
+      data: seat
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Get venue capacity info
+ * @route   GET /api/venues/:id/capacity
+ * @access  Public
+ */
+export const getVenueCapacity = async (req, res, next) => {
+  try {
+    const venue = await Venue.findById(req.params.id);
+
+    if (!venue) {
+      throw new ApiError(404, 'Venue not found');
+    }
+
+    const seatCount = await Seat.countDocuments({ venue: venue._id });
+
+    res.json({
+      success: true,
+      data: {
+        venueId: venue._id,
+        venueName: venue.name,
+        venueCapacity: venue.total_capacity,
+        seatsCreated: seatCount,
+        remainingCapacity: venue.total_capacity - seatCount
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Generate seats in a grid pattern
+ * @route   POST /api/venues/:id/generate-seats
+ * @access  Admin
+ */
+export const generateSeats = async (req, res, next) => {
+  try {
+    const venue = await Venue.findById(req.params.id);
+
+    if (!venue) {
+      throw new ApiError(404, 'Venue not found');
+    }
+
+    const { 
+      rows, 
+      seatsPerRow, 
+      startRow = 'A',
+      startNumber = 1,
+      spacing = 35,
+      startX = 100,
+      startY = 100,
+      clearExisting = false
+    } = req.body;
+
+    if (!rows || !seatsPerRow) {
+      throw new ApiError(400, 'Please provide rows and seatsPerRow');
+    }
+
+    const totalNewSeats = rows * seatsPerRow;
+
+    // Check capacity
+    let currentSeatCount = 0;
+    if (!clearExisting) {
+      currentSeatCount = await Seat.countDocuments({ venue: venue._id });
+    }
+
+    if (currentSeatCount + totalNewSeats > venue.total_capacity) {
+      throw new ApiError(400, 
+        `Cannot generate ${totalNewSeats} seats. ` +
+        `Would exceed venue capacity of ${venue.total_capacity}. ` +
+        `Currently have ${currentSeatCount} seats.`
+      );
+    }
+
+    // Clear existing if requested
+    if (clearExisting) {
+      await Seat.deleteMany({ venue: venue._id });
+    }
+
+    // Generate seats
+    const seatsToCreate = [];
+    const startCharCode = startRow.charCodeAt(0);
+
+    for (let r = 0; r < rows; r++) {
+      const rowLabel = String.fromCharCode(startCharCode + r);
+      for (let n = 0; n < seatsPerRow; n++) {
+        const seatNumber = startNumber + n;
+        seatsToCreate.push({
+          venue: venue._id,
+          row: rowLabel,
+          number: seatNumber,
+          label: `${rowLabel}${seatNumber}`,
+          seatType: 'NORMAL',
+          isActive: true,
+          x: startX + n * spacing,
+          y: startY + r * spacing,
+          rotation: 0
+        });
+      }
+    }
+
+    const insertedSeats = await Seat.insertMany(seatsToCreate);
+
+    res.status(201).json({
+      success: true,
+      message: `Generated ${insertedSeats.length} seats`,
+      data: {
+        seatCount: insertedSeats.length,
+        venueCapacity: venue.total_capacity
+      }
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      throw new ApiError(400, 'Duplicate seats detected. Try clearing existing seats first.');
+    }
     next(error);
   }
 };
@@ -372,9 +534,11 @@ export default {
   createVenue,
   updateVenue,
   deleteVenue,
-  createZone,
-  updateZone,
-  deleteZone,
-  generateSeats,
-  getZoneSeats
+  getVenueSeats,
+  saveVenueSeats,
+  addSeats,
+  deleteSeats,
+  updateSeat,
+  getVenueCapacity,
+  generateSeats
 };

@@ -14,6 +14,10 @@ import Dashboard from './pages/Dashboard';
 // Events
 import EventsList from './pages/Events/EventsList';
 import EventForm from './pages/Events/EventForm';
+import EventZonePainter from './pages/Events/EventZonePainter';
+
+// Categories
+import CategoriesList from './pages/Categories/CategoriesList';
 
 // Users
 import UsersList from './pages/Users/UsersList';
@@ -25,7 +29,7 @@ import ArtistsList from './pages/Artists/ArtistsList';
 import VenuesList from './pages/Venues/VenuesList';
 
 // Seats
-import SeatChartDesigner from './pages/Seats/SeatChartDesigner';
+import VisualSeatDesigner from './pages/Seats/VisualSeatDesigner';
 
 // Orders
 import OrdersList from './pages/Orders/OrdersList';
@@ -143,9 +147,14 @@ function AppRoutes() {
             <EventForm />
           </ProtectedRoute>
         } />
+        <Route path="events/:id/zones" element={
+          <ProtectedRoute allowedRoles={['ADMIN', 'ORG']}>
+            <EventZonePainter />
+          </ProtectedRoute>
+        } />
         <Route path="events/categories" element={
           <ProtectedRoute allowedRoles={['ADMIN']}>
-            <PlaceholderPage title="Event Categories" />
+            <CategoriesList />
           </ProtectedRoute>
         } />
         <Route path="events/drafts" element={
@@ -160,9 +169,9 @@ function AppRoutes() {
             <VenuesList />
           </ProtectedRoute>
         } />
-        <Route path="venues/:venueId/seats" element={
+        <Route path="venues/:venueId/designer" element={
           <ProtectedRoute allowedRoles={['ADMIN']}>
-            <SeatChartDesigner />
+            <VisualSeatDesigner />
           </ProtectedRoute>
         } />
 

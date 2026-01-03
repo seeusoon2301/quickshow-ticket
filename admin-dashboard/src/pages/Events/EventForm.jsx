@@ -2,48 +2,66 @@
  * Event Form - Create/Edit Event - Refactored
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Save, Loader2, Plus, X, Upload } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, Plus, X, Upload, Link as LinkIcon, Image } from 'lucide-react';
 import { Card, Button, Input, Select, Textarea } from '../../components/ui';
 import * as eventService from '../../services/eventService';
 import { API_URL } from '../../services/api';
 
+// Base URL for uploaded images (without /api)
+const BASE_URL = API_URL.replace('/api', '');
+
 export default function EventForm() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { authFetch } = useAuth();
+  const { authFetch, token } = useAuth();
   const isEdit = Boolean(id);
+  const fileInputRef = useRef(null);
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [venues, setVenues] = useState([]);
   const [artistsList, setArtistsList] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [imageMode, setImageMode] = useState('url'); // 'url' or 'upload'
 
   const [form, setForm] = useState({
-    title: '', description: '', category: 'MUSIC',
+    title: '', description: '', category: '',
     startDate: '', startTime: '', endDate: '', endTime: '',
     venue: '', status: 'DRAFT', thumbnail: '', artists: [],
   });
 
-  // Fetch venues and artists
+  // Fetch venues, artists, and categories
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [venuesRes, artistsRes] = await Promise.all([
-          fetch(`${API_URL}/venues`), fetch(`${API_URL}/artists`)
+        const [venuesRes, artistsRes, categoriesRes] = await Promise.all([
+          fetch(`${API_URL}/venues`), 
+          fetch(`${API_URL}/artists`),
+          fetch(`${API_URL}/categories?active=true`)
         ]);
-        const [venuesData, artistsData] = await Promise.all([venuesRes.json(), artistsRes.json()]);
+        const [venuesData, artistsData, categoriesData] = await Promise.all([
+          venuesRes.json(), artistsRes.json(), categoriesRes.json()
+        ]);
         if (venuesData.success) setVenues(venuesData.data.venues || []);
         if (artistsData.success) setArtistsList(artistsData.data.artists || []);
+        if (categoriesData.success) {
+          setCategories(categoriesData.data.categories || []);
+          // Set default category if not editing
+          if (!isEdit && categoriesData.data.categories?.length > 0) {
+            setForm(f => ({ ...f, category: categoriesData.data.categories[0]._id }));
+          }
+        }
       } catch (error) {
         console.error('Error fetching data:', error);
       }
     };
     fetchData();
-  }, []);
+  }, [isEdit]);
 
   // Fetch event if editing
   useEffect(() => {
@@ -58,7 +76,8 @@ export default function EventForm() {
           const start = new Date(c.start_time);
           const end = c.end_time ? new Date(c.end_time) : null;
           setForm({
-            title: c.title, description: c.description || '', category: c.category || 'MUSIC',
+            title: c.title, description: c.description || '', 
+            category: c.category?._id || c.category || '',
             startDate: start.toISOString().split('T')[0], startTime: start.toTimeString().slice(0, 5),
             endDate: end ? end.toISOString().split('T')[0] : '', endTime: end ? end.toTimeString().slice(0, 5) : '',
             venue: c.venue?._id || '', status: c.status, thumbnail: c.thumbnail || '',
@@ -107,6 +126,62 @@ export default function EventForm() {
     }));
   };
 
+  // Handle file upload
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Invalid file type. Only JPEG, PNG, GIF and WebP images are allowed.');
+      return;
+    }
+
+    // Validate file size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('File size must be less than 5MB');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+
+      const res = await fetch(`${API_URL}/upload`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        // Construct full URL for the uploaded image
+        const imageUrl = `${BASE_URL}${data.data.url}`;
+        setForm(f => ({ ...f, thumbnail: imageUrl }));
+        toast.success('Image uploaded successfully');
+      } else {
+        toast.error(data.message || 'Upload failed');
+      }
+    } catch (error) {
+      toast.error('Failed to upload image');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  // Get display URL for thumbnail preview
+  const getThumbnailUrl = () => {
+    if (!form.thumbnail) return null;
+    return form.thumbnail;
+  };
+
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary" size={32} /></div>;
 
   return (
@@ -129,7 +204,7 @@ export default function EventForm() {
               <Textarea label="Description" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={4} placeholder="Event description..." />
               <div className="grid grid-cols-2 gap-4">
                 <Select label="Category" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}
-                  options={[{ value: 'MUSIC', label: 'Concert' }, { value: 'THEATER', label: 'Theater & Art' }, { value: 'SPORT', label: 'Sports' }, { value: 'OTHER', label: 'Other' }]} />
+                  options={categories.map(c => ({ value: c._id, label: c.name }))} />
                 <Select label="Venue" value={form.venue} onChange={e => setForm({ ...form, venue: e.target.value })}
                   options={[{ value: '', label: 'Select venue...' }, ...venues.map(v => ({ value: v._id, label: v.name }))]} />
               </div>
@@ -167,8 +242,74 @@ export default function EventForm() {
 
           <Card title="Thumbnail">
             <div className="space-y-3">
-              {form.thumbnail && <img src={form.thumbnail} alt="Preview" className="w-full h-40 object-cover rounded-lg" />}
-              <Input placeholder="Image URL" value={form.thumbnail} onChange={e => setForm({ ...form, thumbnail: e.target.value })} />
+              {/* Image preview */}
+              {getThumbnailUrl() && (
+                <div className="relative">
+                  <img src={getThumbnailUrl()} alt="Preview" className="w-full h-40 object-cover rounded-lg" />
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, thumbnail: '' })}
+                    className="absolute top-2 right-2 p-1 bg-red-500 rounded-full text-white hover:bg-red-600"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
+
+              {/* Toggle between URL and Upload */}
+              <div className="flex bg-white/5 rounded-lg p-1">
+                <button
+                  type="button"
+                  onClick={() => setImageMode('url')}
+                  className={`flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded text-sm transition-colors ${imageMode === 'url' ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white'}`}
+                >
+                  <LinkIcon size={14} /> URL
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImageMode('upload')}
+                  className={`flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded text-sm transition-colors ${imageMode === 'upload' ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white'}`}
+                >
+                  <Upload size={14} /> Upload
+                </button>
+              </div>
+
+              {/* URL Input */}
+              {imageMode === 'url' && (
+                <Input 
+                  placeholder="Enter image URL" 
+                  value={form.thumbnail} 
+                  onChange={e => setForm({ ...form, thumbnail: e.target.value })} 
+                />
+              )}
+
+              {/* File Upload */}
+              {imageMode === 'upload' && (
+                <div className="space-y-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    id="thumbnail-upload"
+                  />
+                  <label
+                    htmlFor="thumbnail-upload"
+                    className={`flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-white/20 rounded-lg cursor-pointer hover:border-primary/50 hover:bg-white/5 transition-colors ${uploading ? 'opacity-50 pointer-events-none' : ''}`}
+                  >
+                    {uploading ? (
+                      <Loader2 className="animate-spin text-primary" size={24} />
+                    ) : (
+                      <>
+                        <Image size={24} className="text-gray-400 mb-1" />
+                        <span className="text-sm text-gray-400">Click to upload</span>
+                        <span className="text-xs text-gray-500">Max 5MB (JPG, PNG, GIF, WebP)</span>
+                      </>
+                    )}
+                  </label>
+                </div>
+              )}
             </div>
           </Card>
 

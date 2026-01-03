@@ -14,14 +14,11 @@ import { ApiError } from '../middleware/errorHandler.js';
  */
 export const getArtists = async (req, res, next) => {
   try {
-    const { search, genre, page = 1, limit = 20 } = req.query;
+    const { search, page = 1, limit = 20 } = req.query;
 
     const query = {};
     if (search) {
       query.$text = { $search: search };
-    }
-    if (genre) {
-      query.genres = genre;
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -126,24 +123,11 @@ export const getArtistBySlug = async (req, res, next) => {
  */
 export const createArtist = async (req, res, next) => {
   try {
-    const { name, slug, bio, image, genres, social_links, website } = req.body;
-
-    // Check if slug exists
-    if (slug) {
-      const existing = await Artist.findOne({ slug });
-      if (existing) {
-        throw new ApiError(400, 'Artist slug already exists');
-      }
-    }
+    const { name, bio } = req.body;
 
     const artist = new Artist({
       name,
-      slug: slug || name.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, ''),
-      bio,
-      image,
-      genres,
-      social_links,
-      website
+      bio
     });
 
     await artist.save();
@@ -171,17 +155,11 @@ export const updateArtist = async (req, res, next) => {
       throw new ApiError(404, 'Artist not found');
     }
 
-    // Check slug uniqueness if changing
-    if (req.body.slug && req.body.slug !== artist.slug) {
-      const existing = await Artist.findOne({ slug: req.body.slug });
-      if (existing) {
-        throw new ApiError(400, 'Artist slug already exists');
-      }
-    }
-
+    const { name, bio } = req.body;
+    
     const updated = await Artist.findByIdAndUpdate(
       req.params.id,
-      { ...req.body, updatedAt: new Date() },
+      { name, bio, updatedAt: new Date() },
       { new: true, runValidators: true }
     );
 
@@ -254,9 +232,7 @@ export const getPopularArtists = async (req, res, next) => {
         $project: {
           _id: '$artist._id',
           name: '$artist.name',
-          slug: '$artist.slug',
-          image: '$artist.image',
-          genres: '$artist.genres',
+          bio: '$artist.bio',
           upcoming_concerts: '$concert_count'
         }
       }

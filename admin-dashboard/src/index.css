@@ -36,6 +36,29 @@ body {
   background: #5a5a5a;
 }
 
+/* Form inputs - ensure visible text */
+input, select, textarea {
+  color: white !important;
+  background-color: rgb(39, 39, 42) !important;
+}
+
+input::placeholder, textarea::placeholder {
+  color: rgb(113, 113, 122) !important;
+}
+
+/* Select dropdown options */
+select option {
+  background-color: rgb(39, 39, 42);
+  color: white;
+}
+
+/* Date/time input icons */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
 /* Animations */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(6px); }

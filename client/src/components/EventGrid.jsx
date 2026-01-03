@@ -1,0 +1,277 @@
+/**
+ * EventGrid Component - Displays events in a 4x4 grid with "Load More" functionality
+ * Events are displayed randomly, with ability to filter by category, date, city
+ */
+
+import React, { useState, useEffect, useMemo } from "react";
+import { Link } from "react-router-dom";
+import { Calendar, MapPin, Clock } from "lucide-react";
+
+const API_BASE = "http://localhost:5000/api";
+const EVENTS_PER_ROW = 4;
+const INITIAL_ROWS = 4;
+const ROWS_TO_LOAD = 4;
+
+const EventGrid = ({ filters = {}, selectedCategory = "" }) => {
+  const [allEvents, setAllEvents] = useState([]);
+  const [visibleRows, setVisibleRows] = useState(INITIAL_ROWS);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Fetch all events
+  useEffect(() => {
+    const fetchEvents = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch(`${API_BASE}/concerts`);
+        const data = await res.json();
+        const events = data.data?.concerts || [];
+        
+        // Shuffle events for random display
+        const shuffled = [...events].sort(() => Math.random() - 0.5);
+        setAllEvents(shuffled);
+      } catch (err) {
+        console.error("Error fetching events:", err);
+        setError("Không thể tải sự kiện");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchEvents();
+  }, []);
+
+  // Filter events based on current filters
+  const filteredEvents = useMemo(() => {
+    let events = [...allEvents];
+
+    // Filter by selected category from CategoryBar
+    if (selectedCategory) {
+      events = events.filter(
+        (e) => e.category?.slug === selectedCategory || e.category?._id === selectedCategory
+      );
+    }
+
+    // Filter by additional categories from FilterBar
+    if (filters.categories?.length > 0) {
+      events = events.filter((e) =>
+        filters.categories.includes(e.category?.slug) || 
+        filters.categories.includes(e.category?._id)
+      );
+    }
+
+    // Filter by city
+    if (filters.city) {
+      events = events.filter((e) => e.venue?.city === filters.city);
+    }
+
+    // Filter by date range
+    if (filters.startDate) {
+      const start = new Date(filters.startDate);
+      events = events.filter((e) => {
+        const eventDate = e.shows?.[0]?.date ? new Date(e.shows[0].date) : new Date(e.date);
+        return eventDate >= start;
+      });
+    }
+
+    if (filters.endDate) {
+      const end = new Date(filters.endDate);
+      end.setHours(23, 59, 59, 999);
+      events = events.filter((e) => {
+        const eventDate = e.shows?.[0]?.date ? new Date(e.shows[0].date) : new Date(e.date);
+        return eventDate <= end;
+      });
+    }
+
+    return events;
+  }, [allEvents, selectedCategory, filters]);
+
+  // Calculate visible events based on current rows
+  const visibleEvents = useMemo(() => {
+    const totalVisible = visibleRows * EVENTS_PER_ROW;
+    return filteredEvents.slice(0, totalVisible);
+  }, [filteredEvents, visibleRows]);
+
+  // Check if there are more events to load
+  const hasMore = visibleEvents.length < filteredEvents.length;
+
+  // Load more events
+  const handleLoadMore = () => {
+    setVisibleRows((prev) => prev + ROWS_TO_LOAD);
+  };
+
+  // Reset visible rows when filters change
+  useEffect(() => {
+    setVisibleRows(INITIAL_ROWS);
+  }, [selectedCategory, filters]);
+
+  // Format date
+  const formatDate = (dateStr) => {
+    if (!dateStr) return "";
+    const date = new Date(dateStr);
+    return date.toLocaleDateString("vi-VN", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  };
+
+  // Format time
+  const formatTime = (dateStr) => {
+    if (!dateStr) return "";
+    const date = new Date(dateStr);
+    return date.toLocaleTimeString("vi-VN", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  // Get lowest price from ticket classes
+  const getLowestPrice = (event) => {
+    const prices = event.ticketClasses?.map((tc) => tc.price).filter((p) => p > 0) || [];
+    if (prices.length === 0) return null;
+    const min = Math.min(...prices);
+    return new Intl.NumberFormat("vi-VN").format(min);
+  };
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+        {[...Array(16)].map((_, i) => (
+          <div key={i} className="animate-pulse">
+            <div className="aspect-[3/4] bg-white/10 rounded-xl"></div>
+            <div className="mt-3 h-4 bg-white/10 rounded w-3/4"></div>
+            <div className="mt-2 h-3 bg-white/10 rounded w-1/2"></div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-12 text-gray-400">
+        <p>{error}</p>
+      </div>
+    );
+  }
+
+  if (filteredEvents.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <div className="text-6xl mb-4">🎭</div>
+        <h3 className="text-xl font-semibold text-white mb-2">Không tìm thấy sự kiện</h3>
+        <p className="text-gray-400">Thử thay đổi bộ lọc hoặc chọn danh mục khác</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Results count */}
+      <div className="mb-4 text-gray-400 text-sm">
+        Hiển thị {visibleEvents.length} / {filteredEvents.length} sự kiện
+      </div>
+
+      {/* Events Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+        {visibleEvents.map((event) => {
+          const eventDate = event.shows?.[0]?.date || event.date;
+          const lowestPrice = getLowestPrice(event);
+          
+          return (
+            <Link
+              key={event._id}
+              to={`/event/${event._id}`}
+              className="group block"
+            >
+              <div className="relative overflow-hidden rounded-xl aspect-[3/4] bg-white/5">
+                {/* Event Image */}
+                <img
+                  src={event.thumbnail || "/placeholder-event.jpg"}
+                  alt={event.title || event.name}
+                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  onError={(e) => {
+                    e.target.src = "/placeholder-event.jpg";
+                  }}
+                />
+                
+                {/* Gradient Overlay */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                
+                {/* Category Badge */}
+                {event.category && (
+                  <div className="absolute top-2 left-2">
+                    <span className="px-2 py-1 text-xs font-medium bg-primary/90 text-white rounded-full">
+                      {event.category.name}
+                    </span>
+                  </div>
+                )}
+                
+                {/* Price Badge */}
+                {lowestPrice && (
+                  <div className="absolute top-2 right-2">
+                    <span className="px-2 py-1 text-xs font-medium bg-black/60 text-white rounded-full">
+                      Từ {lowestPrice}đ
+                    </span>
+                  </div>
+                )}
+                
+                {/* Hover Info */}
+                <div className="absolute bottom-0 left-0 right-0 p-3 translate-y-full group-hover:translate-y-0 transition-transform">
+                  <div className="flex items-center gap-2 text-white/80 text-xs mb-1">
+                    <Calendar size={12} />
+                    <span>{formatDate(eventDate)}</span>
+                    {formatTime(eventDate) && (
+                      <>
+                        <Clock size={12} />
+                        <span>{formatTime(eventDate)}</span>
+                      </>
+                    )}
+                  </div>
+                  {event.venue && (
+                    <div className="flex items-center gap-2 text-white/80 text-xs">
+                      <MapPin size={12} />
+                      <span className="truncate">{event.venue.name}, {event.venue.city}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {/* Event Info */}
+              <div className="mt-3">
+                <h3 className="font-semibold text-white group-hover:text-primary transition line-clamp-2">
+                  {event.name}
+                </h3>
+                <div className="mt-1 flex items-center gap-2 text-gray-400 text-sm">
+                  <Calendar size={14} />
+                  <span>{formatDate(eventDate)}</span>
+                </div>
+                {event.venue?.city && (
+                  <div className="mt-1 flex items-center gap-2 text-gray-400 text-sm">
+                    <MapPin size={14} />
+                    <span>{event.venue.city}</span>
+                  </div>
+                )}
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* Load More Button */}
+      {hasMore && (
+        <div className="mt-8 text-center">
+          <button
+            onClick={handleLoadMore}
+            className="px-8 py-3 bg-primary hover:bg-primary/90 text-white font-semibold rounded-full transition-all hover:scale-105 active:scale-95"
+          >
+            Xem thêm ({filteredEvents.length - visibleEvents.length} sự kiện còn lại)
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default EventGrid;

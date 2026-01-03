@@ -3,7 +3,12 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import config from './config/index.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Import routes
 import authRoutes from './routes/auth.routes.js';
@@ -15,6 +20,8 @@ import ticketRoutes from './routes/ticket.routes.js';
 import paymentRoutes from './routes/payment.routes.js';
 import voucherRoutes from './routes/voucher.routes.js';
 import artistRoutes from './routes/artist.routes.js';
+import uploadRoutes from './routes/upload.routes.js';
+import categoryRoutes from './routes/category.routes.js';
 
 // Import error handler
 import { errorHandler } from './middleware/errorHandler.js';
@@ -47,7 +54,10 @@ if (config.nodeEnv !== 'test') {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Rate limiting
+// Serve uploaded files statically
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+// Rate limiting (disabled in development)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // limit each IP to 100 requests per windowMs
@@ -58,6 +68,8 @@ const limiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => {
+    // Skip rate limiting entirely in development
+    if (config.nodeEnv === 'development') return true;
     // Skip rate limiting for payment callbacks
     return req.path.includes('/payments/vnpay') || req.path.includes('/payments/momo');
   }
@@ -65,14 +77,15 @@ const limiter = rateLimit({
 
 app.use('/api/', limiter);
 
-// More strict rate limit for auth routes
+// More strict rate limit for auth routes (disabled in development)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10, // 10 attempts per window
   message: {
     success: false,
     message: 'Too many login attempts, please try again later.'
-  }
+  },
+  skip: () => config.nodeEnv === 'development' // Skip in development
 });
 
 /**
@@ -107,6 +120,8 @@ app.use('/api/tickets', ticketRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/vouchers', voucherRoutes);
 app.use('/api/artists', artistRoutes);
+app.use('/api/upload', uploadRoutes);
+app.use('/api/categories', categoryRoutes);
 
 /**
  * 404 Handler

@@ -44,18 +44,7 @@ const Login = () => {
     }
   };
 
-  // Demo credentials for quick testing
-  const demoAccounts = [
-    { role: 'Admin', email: 'admin@quickshow.com', password: 'Password123!' },
-    { role: 'Organizer', email: 'organizer@quickshow.com', password: 'Password123!' },
-    { role: 'Staff', email: 'staff@quickshow.com', password: 'Password123!' },
-  ];
 
-  const fillDemo = (account) => {
-    setEmail(account.email);
-    setPassword(account.password);
-    setError('');
-  };
 
   if (authLoading) {
     return (
@@ -183,32 +172,6 @@ const Login = () => {
               </button>
             </form>
 
-            {/* Demo Accounts */}
-            <div className="mt-8 pt-6 border-t border-white/10">
-              <p className="text-xs text-gray-500 text-center mb-4 uppercase tracking-wider">
-                Quick Demo Access
-              </p>
-              <div className="grid gap-2">
-                {demoAccounts.map((account) => (
-                  <button
-                    key={account.role}
-                    onClick={() => fillDemo(account)}
-                    className="flex items-center justify-between px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-colors group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className={`w-2 h-2 rounded-full ${
-                        account.role === 'Admin' ? 'bg-red-400' :
-                        account.role === 'Organizer' ? 'bg-blue-400' : 'bg-emerald-400'
-                      }`}></span>
-                      <span className="text-sm text-gray-400 group-hover:text-white transition-colors">
-                        {account.role}
-                      </span>
-                    </div>
-                    <span className="text-xs text-gray-600">{account.email}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
           </div>
 
           <p className="text-center text-gray-600 text-sm mt-6">

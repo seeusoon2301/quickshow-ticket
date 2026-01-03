@@ -1,227 +1,234 @@
+/**
+ * Navbar Component - Clean redesign inspired by cticket.vn
+ */
+
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { assets } from "../assets/assets";
-import { MenuIcon, SearchIcon, TicketPlus, XIcon, ShoppingCart } from "lucide-react";
+import { SearchIcon, ShoppingCart, Menu, X, Ticket, History } from "lucide-react";
 import { useClerk, UserButton, useUser } from "@clerk/clerk-react";
 import { useCart } from "../context/CartContext";
 
+const API_BASE = "http://localhost:5000/api";
+
 const Navbar = () => {
-  const [isOpen, setIsOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { user } = useUser();
   const { openSignIn } = useClerk();
-  const { itemCount, formatTimeRemaining, hasItems, isExpiringSoon } = useCart();
+  const { itemCount, isExpiringSoon } = useCart();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [searchResults, setSearchResults] = useState([]);
   const searchRef = useRef(null);
-  const [isVisible, setIsVisible] = useState(true);
-  const [lastScrollY, setLastScrollY] = useState(0);
-  const [results, setResults] = useState([]);
 
-  // ✅ Theo dõi cuộn để ẩn navbar
-  useEffect(() => {
-  const handleScroll = () => {
-      // Nếu popup search mở thì không cho navbar biến mất
-      if (isSearchOpen) {
-        setIsVisible(true);
-        return;
-      }
-
-      const currentScrollY = window.scrollY;
-      if (currentScrollY > lastScrollY && currentScrollY > 100) setIsVisible(false);
-      else setIsVisible(true);
-      setLastScrollY(currentScrollY);
-    };
-
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, [lastScrollY, isSearchOpen]);
-
-
-  // ✅ Click ngoài box thì đóng popup featured
+  // Close search dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (searchRef.current && !searchRef.current.contains(e.target)) {
-        setIsSearchOpen(false);
-        setTimeout(() => setResults([]), 200);
+        setIsSearchFocused(false);
       }
     };
-    document.addEventListener("pointerdown", handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Fetch search results
+  useEffect(() => {
+    if (searchTerm.trim()) {
+      fetch(`${API_BASE}/concerts?search=${encodeURIComponent(searchTerm)}&limit=5`)
+        .then((res) => res.json())
+        .then((response) => {
+          setSearchResults(response.data?.concerts || []);
+        })
+        .catch(() => setSearchResults([]));
+    } else {
+      // Fetch trending when no search term
+      fetch(`${API_BASE}/concerts?limit=4&status=ON_SALE`)
+        .then((res) => res.json())
+        .then((response) => {
+          setSearchResults(response.data?.concerts || []);
+        })
+        .catch(() => setSearchResults([]));
+    }
+  }, [searchTerm]);
+
+  const handleSearch = (e) => {
+    if (e.key === "Enter" && searchTerm.trim()) {
+      navigate(`/search?q=${encodeURIComponent(searchTerm.trim())}`);
+      setSearchTerm("");
+      setIsSearchFocused(false);
+    }
+  };
 
   const isActive = (path) => location.pathname === path;
 
-
   return (
-    <div
-      className={`fixed top-0 left-0 z-50 w-full flex items-center justify-between px-6 md:px-16 lg:px-36 py-5 transition-transform duration-500 ${
-        isVisible ? "translate-y-0" : "-translate-y-full"
-      }`}
-    >
-      <Link to="/" className="max-md:flex-1">
-        <img src={assets.logo} alt="" className="w-48 h-auto" />
-      </Link>
+    <nav className="fixed top-0 left-0 right-0 z-50 bg-[#1a1a1a] border-b border-white/10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16">
+          {/* Logo */}
+          <Link to="/" className="flex-shrink-0">
+            <img src={assets.logo} alt="QuickShow" className="h-10 w-auto" />
+          </Link>
 
-      {/* Links */}
-      <div
-        className={`max-md:absolute max-md:top-0 max-md:left-0 max-md:font-medium max-md:text-lg z-50 flex flex-col md:flex-row items-center max-md:justify-center gap-12 md:px-8 py-4 max-md:h-screen md:rounded-full backdrop-blur bg-black/70 md:bg-white/10 md:border border-gray-300/20 overflow-hidden transition-[width] duration-300 md:ml-16 ${
-          isOpen ? "max-md:w-full" : "max-md:w-0"
-        }`}
-      >
-        <XIcon
-          className="md:hidden absolute top-6 right-6 w-8 h-8 cursor-pointer"
-          onClick={() => setIsOpen(!isOpen)}
-        />
-        {["/", "/music", "/theatersandart", "/sport", "/other"].map((path, i) => {
-          const labels = ["Home", "Music", "Theaters & Art", "Sport", "Other"];
-          return (
-            <Link
-              key={path}
-              onClick={() => {
-                scrollTo(0, 0);
-                setIsOpen(false);
-              }}
-              to={path}
-              className={`transition ${
-                isActive(path)
-                  ? "text-primary font-semibold"
-                  : "text-white/70 hover:text-white"
-              }`}
-            >
-              {labels[i]}
-            </Link>
-          );
-        })}
-      </div>
+          {/* Search Bar - Desktop */}
+          <div className="hidden md:flex flex-1 max-w-xl mx-8" ref={searchRef}>
+            <div className="relative w-full">
+              <input
+                type="text"
+                placeholder="Tìm kiếm sự kiện, nghệ sĩ..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onFocus={() => setIsSearchFocused(true)}
+                onKeyDown={handleSearch}
+                className="w-full pl-12 pr-4 py-2.5 bg-white/10 border border-white/20 rounded-full text-white placeholder-gray-400 focus:outline-none focus:border-primary focus:bg-white/15 transition-all"
+              />
+              <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
 
-      {/* Search & User */}
-      <div className="flex items-center gap-8 relative" ref={searchRef}>
-        <div className="relative hidden md:block">
-          <input
-            type="text"
-            placeholder="Search events, artists..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            onFocus={() => setIsSearchOpen(true)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && searchTerm.trim() !== "") {
-                navigate(`/search?q=${encodeURIComponent(searchTerm.trim())}`);
-                setSearchTerm("");
-                setIsSearchOpen(false);
-              }
-            }}
-            className="pl-10 pr-4 py-2 rounded-2xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-primary transition-all w-64 text-black font-semibold"
-          />
-          <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-5 h-5 cursor-pointer" />
-
-          {/* ✅ SEARCH DROPDOWN */}
-          {isSearchOpen && (
-            <div className="absolute top-full left-0 mt-2 w-[420px] bg-white shadow-xl border rounded-xl p-4 z-50 animate-fadeIn">
-
-              {/* Nếu đang nhập searchTerm → Gợi ý */}
-              {searchTerm.trim() !== "" ? (
-                <div className="space-y-2">
-                  <p className="text-sm text-gray-600">Search suggestions</p>
-                  {["Taylor Swift Tour", "Ho Chi Minh Concert", "EDM Festival", "Comedy Show"]
-                    .filter(item => item.toLowerCase().includes(searchTerm.toLowerCase()))
-                    .map((item, i) => (
-                      <div
-                        key={i}
-                        className="px-3 py-2 flex gap-3 items-center hover:bg-gray-100 rounded-lg cursor-pointer"
-                        onClick={() => navigate(`/search?q=${item}`)}
-                      >
-                        <SearchIcon className="w-4 h-4 text-gray-500" />
-                        <span className="text-black">{item}</span>
-                      </div>
-                    ))}
-                </div>
-              ) : (
-                /* ✅ Featured search khi chưa gõ */
-                <div>
-                  <p className="text-sm text-gray-600 mb-2">Trending Searches</p>
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {["Jazz Night", "Rock Concert", "KPop Show", "Theater", "Stand-up Comedy"].map((tag, i) => (
-                      <span
-                        key={i}
-                        onClick={() => navigate(`/search?q=${tag}`)}
-                        className="text-xs bg-gray-200 hover:bg-primary hover:text-white transition px-3 py-1 rounded-full cursor-pointer"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-
-                  <p className="text-sm text-gray-600 mb-2">Popular Events</p>
-                  <div className="space-y-2">
-                    {[
-                      { name: "Jazz Night Live", img: "https://i.ibb.co/2kQZ5W8/event1.jpg" },
-                      { name: "Orchestra Symphony", img: "https://i.ibb.co/Ht4qWjh/event2.jpg" },
-                      { name: "Kpop Tour 2025", img: "https://i.ibb.co/MG3Rw6Z/event3.jpg" },
-                    ].map((ev, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded-lg cursor-pointer"
-                        onClick={() => navigate("/music")}
-                      >
-                        <img src={ev.img} className="w-10 h-10 rounded-md object-cover" />
-                        <p className="font-medium text-black text-sm">{ev.name}</p>
-                      </div>
-                    ))}
+              {/* Search Dropdown */}
+              {isSearchFocused && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-[#2a2a2a] border border-white/10 rounded-xl shadow-xl overflow-hidden z-50">
+                  <div className="p-3">
+                    <p className="text-xs text-gray-400 mb-2 px-2">
+                      {searchTerm.trim() ? "Kết quả tìm kiếm" : "Sự kiện nổi bật"}
+                    </p>
+                    {searchResults.length > 0 ? (
+                      searchResults.map((event) => (
+                        <div
+                          key={event._id}
+                          onClick={() => {
+                            navigate(`/event/${event._id}`);
+                            setIsSearchFocused(false);
+                            setSearchTerm("");
+                          }}
+                          className="flex items-center gap-3 p-2 hover:bg-white/5 rounded-lg cursor-pointer transition"
+                        >
+                          <img
+                            src={event.thumbnail || "https://via.placeholder.com/48"}
+                            alt={event.title}
+                            className="w-12 h-12 rounded-lg object-cover"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-white text-sm font-medium truncate">{event.title}</p>
+                            <p className="text-gray-400 text-xs truncate">{event.venue?.name || "Đang cập nhật"}</p>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-gray-500 text-sm text-center py-4">Không tìm thấy kết quả</p>
+                    )}
                   </div>
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Right Section */}
+          <div className="flex items-center gap-2 sm:gap-4">
+            {/* Mobile Search */}
+            <button className="md:hidden p-2 text-white hover:text-primary transition">
+              <SearchIcon size={22} />
+            </button>
+
+            {/* Cart */}
+            <button
+              onClick={() => navigate("/checkout")}
+              className="relative p-2 text-white hover:text-primary transition"
+            >
+              <ShoppingCart size={22} />
+              {itemCount > 0 && (
+                <span className={`absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center ${
+                  isExpiringSoon() ? 'bg-red-500 animate-pulse' : 'bg-primary'
+                } text-white`}>
+                  {itemCount}
+                </span>
+              )}
+            </button>
+
+            {/* Auth */}
+            {!user ? (
+              <button
+                onClick={openSignIn}
+                className="hidden sm:flex items-center gap-2 px-5 py-2 bg-primary hover:bg-primary/90 rounded-full font-semibold text-white transition"
+              >
+                Đăng nhập
+              </button>
+            ) : (
+              <div className="hidden sm:block">
+                <UserButton
+                  appearance={{
+                    elements: {
+                      avatarBox: { width: "40px", height: "40px", border: "2px solid #F84565" }
+                    }
+                  }}
+                >
+                  <UserButton.MenuItems>
+                    <UserButton.Action
+                      label="Vé của tôi"
+                      labelIcon={<Ticket size={16} />}
+                      onClick={() => navigate("/my-tickets")}
+                    />
+                    <UserButton.Action
+                      label="Lịch sử đặt"
+                      labelIcon={<History size={16} />}
+                      onClick={() => navigate("/orders")}
+                    />
+                  </UserButton.MenuItems>
+                </UserButton>
+              </div>
+            )}
+
+            {/* Mobile Menu Toggle */}
+            <button
+              className="sm:hidden p-2 text-white"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            >
+              {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile Menu */}
+      {mobileMenuOpen && (
+        <div className="sm:hidden bg-[#1a1a1a] border-t border-white/10 px-4 py-4 space-y-3">
+          <Link
+            to="/"
+            onClick={() => setMobileMenuOpen(false)}
+            className={`block py-2 px-4 rounded-lg transition ${isActive("/") ? "bg-primary text-white" : "text-white hover:bg-white/10"}`}
+          >
+            Trang chủ
+          </Link>
+          <Link
+            to="/my-tickets"
+            onClick={() => setMobileMenuOpen(false)}
+            className={`block py-2 px-4 rounded-lg transition ${isActive("/my-tickets") ? "bg-primary text-white" : "text-white hover:bg-white/10"}`}
+          >
+            Vé của tôi
+          </Link>
+          <Link
+            to="/orders"
+            onClick={() => setMobileMenuOpen(false)}
+            className={`block py-2 px-4 rounded-lg transition ${isActive("/orders") ? "bg-primary text-white" : "text-white hover:bg-white/10"}`}
+          >
+            Lịch sử đặt
+          </Link>
+          {!user && (
+            <button
+              onClick={() => {
+                openSignIn();
+                setMobileMenuOpen(false);
+              }}
+              className="w-full py-2 px-4 bg-primary rounded-lg text-white font-semibold"
+            >
+              Đăng nhập
+            </button>
           )}
         </div>
-
-  <SearchIcon className="md:hidden w-6 h-6 cursor-pointer ml-2" />
-
-  {/* Cart Icon */}
-  <button
-    onClick={() => navigate("/checkout")}
-    className="relative p-2 rounded-full hover:bg-white/10 transition"
-    title={hasItems ? `Cart (${formatTimeRemaining()} left)` : "Cart"}
-  >
-    <ShoppingCart className="w-6 h-6" />
-    {itemCount > 0 && (
-      <span className={`absolute -top-1 -right-1 w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center ${
-        isExpiringSoon() ? 'bg-red-500 animate-pulse' : 'bg-primary'
-      } text-black`}>
-        {itemCount}
-      </span>
-    )}
-  </button>
-
-  {!user ? (
-    <button
-      onClick={openSignIn}
-      className="px-4 py-1 sm:px-7 sm:py-2 bg-primary hover:bg-primary-dull transition rounded-full font-bold cursor-pointer -ml-2"
-    >
-      Login
-    </button>
-  ) : (
-    <UserButton appearance={{ elements: { avatarBox: { border: "2px solid #F84565", width: "48px", height: "48px" }}}}
-    >
-      <UserButton.MenuItems>
-        <UserButton.Action
-          label="My Tickets"
-          labelIcon={<TicketPlus width={15} />}
-          onClick={() => navigate("/my-tickets")}
-        />
-      </UserButton.MenuItems>
-    </UserButton>
-  )}
-</div>
-
-
-      <MenuIcon
-        className="max-md:ml-4 md:hidden w-8 h-8 cursor-pointer"
-        onClick={() => setIsOpen(!isOpen)}
-      />
-    </div>
+      )}
+    </nav>
   );
 };
 

@@ -1,13 +1,22 @@
 /**
- * Venue Service - API functions for venue management
+ * Venue Service - API functions for venue and seat management
+ * 
+ * NEW STRUCTURE:
+ * - Venues have Seats directly (no zones)
+ * - Seat layouts are physical templates for the venue
+ * - TicketClasses are per-event (handled via concert/event service)
  */
 
 import { API_URL, buildQueryString, handleResponse } from './api';
 
+// ========================
+// Venue CRUD
+// ========================
+
 /**
  * Get all venues
  */
-export const getVenues = async (authFetch, { page = 1, limit = 10, search, city }) => {
+export const getVenues = async (authFetch, { page = 1, limit = 10, search, city } = {}) => {
   const query = buildQueryString({ page, limit, search, city });
   const response = await authFetch(`${API_URL}/venues?${query}`);
   return handleResponse(response);
@@ -18,6 +27,14 @@ export const getVenues = async (authFetch, { page = 1, limit = 10, search, city 
  */
 export const getVenueById = async (authFetch, venueId) => {
   const response = await authFetch(`${API_URL}/venues/${venueId}`);
+  return handleResponse(response);
+};
+
+/**
+ * Get venue capacity info
+ */
+export const getVenueCapacity = async (authFetch, venueId) => {
+  const response = await authFetch(`${API_URL}/venues/${venueId}/capacity`);
   return handleResponse(response);
 };
 
@@ -54,59 +71,75 @@ export const deleteVenue = async (authFetch, venueId) => {
 };
 
 // ========================
-// Zone Management
+// Seat Management
 // ========================
 
 /**
- * Create zone for venue
+ * Get all seats for a venue
  */
-export const createZone = async (authFetch, venueId, zoneData) => {
-  const response = await authFetch(`${API_URL}/venues/${venueId}/zones`, {
-    method: 'POST',
-    body: JSON.stringify(zoneData),
-  });
+export const getVenueSeats = async (authFetch, venueId) => {
+  const response = await authFetch(`${API_URL}/venues/${venueId}/seats`);
   return handleResponse(response);
 };
 
 /**
- * Update zone
+ * Save all seats for a venue (replace existing)
  */
-export const updateZone = async (authFetch, venueId, zoneId, zoneData) => {
-  const response = await authFetch(`${API_URL}/venues/${venueId}/zones/${zoneId}`, {
+export const saveVenueSeats = async (authFetch, venueId, seats) => {
+  const response = await authFetch(`${API_URL}/venues/${venueId}/seats`, {
     method: 'PUT',
-    body: JSON.stringify(zoneData),
+    body: JSON.stringify({ seats }),
   });
   return handleResponse(response);
 };
 
 /**
- * Delete zone
+ * Add seats to venue
  */
-export const deleteZone = async (authFetch, venueId, zoneId) => {
-  const response = await authFetch(`${API_URL}/venues/${venueId}/zones/${zoneId}`, {
-    method: 'DELETE',
-  });
-  return handleResponse(response);
-};
-
-/**
- * Generate seats for zone
- */
-export const generateSeats = async (authFetch, venueId, zoneId, { rows, seatsPerRow, startRow = 'A' }) => {
-  const response = await authFetch(`${API_URL}/venues/${venueId}/zones/${zoneId}/generate-seats`, {
+export const addSeats = async (authFetch, venueId, seats) => {
+  const response = await authFetch(`${API_URL}/venues/${venueId}/seats`, {
     method: 'POST',
-    body: JSON.stringify({ rows, seatsPerRow, startRow }),
+    body: JSON.stringify({ seats }),
   });
   return handleResponse(response);
 };
 
 /**
- * Get zone seats
+ * Delete specific seats
  */
-export const getZoneSeats = async (authFetch, venueId, zoneId) => {
-  const response = await authFetch(`${API_URL}/venues/${venueId}/zones/${zoneId}/seats`);
+export const deleteSeats = async (authFetch, venueId, seatIds) => {
+  const response = await authFetch(`${API_URL}/venues/${venueId}/seats`, {
+    method: 'DELETE',
+    body: JSON.stringify({ seatIds }),
+  });
   return handleResponse(response);
 };
+
+/**
+ * Update single seat
+ */
+export const updateSeat = async (authFetch, venueId, seatId, data) => {
+  const response = await authFetch(`${API_URL}/venues/${venueId}/seats/${seatId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+/**
+ * Generate seats in a grid pattern
+ */
+export const generateSeats = async (authFetch, venueId, config) => {
+  const response = await authFetch(`${API_URL}/venues/${venueId}/generate-seats`, {
+    method: 'POST',
+    body: JSON.stringify(config),
+  });
+  return handleResponse(response);
+};
+
+// ========================
+// Defaults & Constants
+// ========================
 
 /**
  * Default venue form
@@ -116,26 +149,22 @@ export const DEFAULT_VENUE_FORM = {
   address: '',
   city: '',
   total_capacity: 0,
-  description: '',
-  facilities: [],
   google_maps_url: '',
-  contact: { phone: '', email: '' },
 };
 
 /**
- * Default zone form
+ * Seat types (physical seat types, not pricing)
  */
-export const DEFAULT_ZONE_FORM = {
-  name: '',
-  capacity: 0,
-  color: '#3B82F6',
-  description: '',
-};
+export const SEAT_TYPES = [
+  { value: 'NORMAL', label: 'Normal', color: '#3B82F6' },
+  { value: 'WHEELCHAIR', label: 'Wheelchair', color: '#22C55E' },
+  { value: 'RESTRICTED', label: 'Restricted View', color: '#6B7280' },
+];
 
 /**
- * Zone color presets
+ * Color presets for ticket classes (used in event setup)
  */
-export const ZONE_COLORS = [
+export const TICKET_CLASS_COLORS = [
   { name: 'Blue', value: '#3B82F6' },
   { name: 'Purple', value: '#8B5CF6' },
   { name: 'Pink', value: '#EC4899' },
@@ -144,4 +173,6 @@ export const ZONE_COLORS = [
   { name: 'Yellow', value: '#EAB308' },
   { name: 'Green', value: '#22C55E' },
   { name: 'Teal', value: '#14B8A6' },
+  { name: 'Gold', value: '#D4AF37' },
+  { name: 'Slate', value: '#64748B' },
 ];

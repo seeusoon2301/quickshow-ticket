@@ -18,6 +18,7 @@ const formatPrice = (price) => {
 const Search = () => {
   const navigate = useNavigate();
   const [results, setResults] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
@@ -27,6 +28,17 @@ const Search = () => {
   });
 
   const query = new URLSearchParams(useLocation().search).get("q") || "";
+
+  // Fetch categories on mount
+  useEffect(() => {
+    fetch(`${API_URL}/categories`)
+      .then((res) => res.json())
+      .then((response) => {
+        const cats = response.data?.categories || [];
+        setCategories(cats);
+      })
+      .catch((err) => console.error("Failed to fetch categories:", err));
+  }, []);
 
   useEffect(() => {
     if (!query.trim()) {
@@ -57,13 +69,10 @@ const Search = () => {
       });
   }, [query, filters]);
 
-  const categories = [
-    { value: '', label: 'All Categories' },
-    { value: 'MUSIC', label: 'Music & Concert' },
-    { value: 'THEATER', label: 'Theater & Art' },
-    { value: 'SPORT', label: 'Sports' },
-    { value: 'OTHER', label: 'Other' },
-  ];
+  const getCategoryLabel = (slug) => {
+    const cat = categories.find(c => c.slug === filters.category);
+    return cat?.name || 'Tất cả';
+  };
 
   return (
     <div className="px-6 md:px-16 lg:px-24 py-8 min-h-screen">
@@ -86,7 +95,7 @@ const Search = () => {
           
           {filters.category && (
             <span className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 text-gray-300">
-              {categories.find(c => c.value === filters.category)?.label}
+              {getCategoryLabel(filters.category)}
               <X size={16} className="cursor-pointer hover:text-primary" onClick={() => setFilters(f => ({...f, category: ''}))} />
             </span>
           )}
@@ -99,8 +108,9 @@ const Search = () => {
               onChange={(e) => setFilters(f => ({...f, category: e.target.value}))}
               className="px-4 py-2 rounded-lg bg-gray-800 text-white border border-gray-700 focus:border-primary focus:outline-none"
             >
+              <option value="">Tất cả danh mục</option>
               {categories.map(cat => (
-                <option key={cat.value} value={cat.value}>{cat.label}</option>
+                <option key={cat._id} value={cat.slug}>{cat.name}</option>
               ))}
             </select>
 

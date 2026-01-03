@@ -48,22 +48,24 @@ const EventDetail = () => {
         const res = await fetch(`${API_BASE}/concerts/${id}`);
         if (res.ok) {
           const response = await res.json();
-          const concert = response.data || response;
-          setEvent(concert);
+          // API returns { data: { concert, ticketClasses, seatStats } }
+          const concertData = response.data?.concert || response.data || response;
+          const ticketClasses = response.data?.ticketClasses || [];
+          
+          // Merge ticket classes into concert data
+          setEvent({
+            ...concertData,
+            ticket_classes: ticketClasses
+          });
         } else {
-          // fallback to all
-          const r2 = await fetch(`${API_BASE}/concerts`);
-          const allData = await r2.json();
-          const all = allData.data?.concerts || allData.data || allData.concerts || [];
-          const found = all.find((e) => e._id === id || e.id === id);
-          setEvent(found || all[0]);
+          console.error('Failed to fetch event');
         }
 
         // recommended: fetch all and pick random 4
         const r = await fetch(`${API_BASE}/concerts`);
         const allEventsData = await r.json();
         const allEvents = allEventsData.data?.concerts || allEventsData.data || allEventsData.concerts || [];
-        const others = allEvents.filter((e) => e._id !== id && e._id !== (event && event._id));
+        const others = allEvents.filter((e) => e._id !== id);
         // shuffle
         for (let i = others.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
@@ -78,7 +80,6 @@ const EventDetail = () => {
     };
 
     fetchEvent();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   useEffect(() => {
@@ -205,6 +206,30 @@ const EventDetail = () => {
             </p>
           </section>
 
+          {/* Venue Info */}
+          {event.venue && typeof event.venue === 'object' && (
+            <section className="mt-6 bg-[rgb(37,36,36)] p-6 rounded-lg">
+              <h2 className="text-xl font-semibold mb-3">Venue</h2>
+              <div className="space-y-3">
+                <div>
+                  <h3 className="text-lg font-medium text-white">{event.venue.name}</h3>
+                  <p className="text-gray-400">{event.venue.address}{event.venue.city ? `, ${event.venue.city}` : ''}</p>
+                </div>
+                {event.venue.google_maps_url && (
+                  <a 
+                    href={event.venue.google_maps_url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition text-sm"
+                  >
+                    <MapPin className="w-4 h-4" />
+                    View on Google Maps
+                  </a>
+                )}
+              </div>
+            </section>
+          )}
+
           {/* Schedule & Seating */}
           <section className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-[rgb(37,36,36)] p-6 rounded-lg">
@@ -277,12 +302,16 @@ const EventDetail = () => {
                   className="w-full p-3 rounded-lg bg-black/30 border border-gray-700 focus:border-primary focus:outline-none"
                 >
                   {event.ticket_classes.map((t) => (
-                    <option key={t.name} value={t.name}>{`${t.name} - ${formatPrice(t.price)}đ (${t.quota - t.sold_qty} left)`}</option>
+                    <option key={t._id || t.name} value={t.name}>{`${t.name} - ${formatPrice(t.price)}đ (${t.available || t.available_qty || 0} left)`}</option>
                   ))}
                 </select>
               ) : (
                 <div className="text-2xl font-bold text-primary">
-                  From {formatPrice(event.base_price)}đ
+                  {event.priceRange ? (
+                    `From ${formatPrice(event.priceRange.min)}đ`
+                  ) : (
+                    'Price TBA'
+                  )}
                 </div>
               )}
 
@@ -351,13 +380,12 @@ const EventDetail = () => {
 
           <div className="bg-[rgb(37,36,36)] p-6 rounded-lg mt-6">
             <h3 className="text-lg font-semibold">Organizer</h3>
-            <p className="text-gray-300 mt-2">{(event.organizer && event.organizer.name) || "Unknown Organizer"}</p>
-            <p className="text-gray-400 text-sm mt-1">{(event.organizer && event.organizer.description) || "No additional information."}</p>
-            {event.organizer && event.organizer.contact && (
-              <div className="mt-3 text-sm text-gray-400">
-                <div>Contact: {event.organizer.contact}</div>
-              </div>
-            )}
+            <p className="text-gray-300 mt-2">
+              {event.organizer?.organizer?.company_name || event.organizer?.username || event.organizer?.fullName || "Unknown Organizer"}
+            </p>
+            <p className="text-gray-400 text-sm mt-1">
+              {event.organizer?.organizer?.description || "Event organized and managed professionally."}
+            </p>
           </div>
         </aside>
       </div>

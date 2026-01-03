@@ -20,20 +20,29 @@ export default function VouchersList() {
   const [form, setForm] = useState(voucherService.DEFAULT_VOUCHER_FORM);
   const [saving, setSaving] = useState(false);
 
-  const fetchVouchers = useCallback(async () => {
+  const fetchVouchers = useCallback(async (page = 1) => {
     try {
       setLoading(true);
-      const data = await voucherService.getVouchers(authFetch, { ...filters, page: pagination.page });
+      const data = await voucherService.getVouchers(authFetch, { ...filters, page });
       setVouchers(data.data.vouchers || []);
-      setPagination(p => ({ ...p, ...data.data.pagination }));
+      setPagination(prev => ({ 
+        ...prev, 
+        page,
+        total: data.data.pagination?.total || 0,
+        pages: data.data.pagination?.pages || 1
+      }));
     } catch (error) {
       toast.error(error.message);
     } finally {
       setLoading(false);
     }
-  }, [authFetch, filters, pagination.page]);
+  }, [authFetch, filters]);
 
-  useEffect(() => { fetchVouchers(); }, [fetchVouchers]);
+  useEffect(() => { fetchVouchers(1); }, [fetchVouchers]);
+
+  const handlePageChange = (newPage) => {
+    fetchVouchers(newPage);
+  };
 
   const openModal = (type, voucher = null) => {
     setModal({ type, voucher });
@@ -123,7 +132,7 @@ export default function VouchersList() {
       </div>
 
       {/* Filters */}
-      <Card>
+      <Card className="p-4">
         <div className="flex flex-col sm:flex-row gap-4">
           <Select value={filters.status} onChange={e => setFilters(f => ({ ...f, status: e.target.value }))}
             options={[{ value: '', label: 'All Status' }, { value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }, { value: 'expired', label: 'Expired' }]} className="flex-1" />
@@ -190,7 +199,7 @@ export default function VouchersList() {
               </table>
             </div>
             <Pagination page={pagination.page} totalPages={pagination.pages} total={pagination.total}
-              onPageChange={p => setPagination(prev => ({ ...prev, page: p }))} itemLabel="vouchers" />
+              onPageChange={handlePageChange} />
           </>
         )}
       </Card>

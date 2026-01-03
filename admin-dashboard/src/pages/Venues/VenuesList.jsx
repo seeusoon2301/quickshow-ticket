@@ -2,16 +2,17 @@
  * Venues List - Refactored
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
-import { Plus, MapPin, Users, Layers, Edit, Trash2, RefreshCw, MoreVertical, Building2, Phone, Mail, Globe, Eye } from 'lucide-react';
-import { PageLoader, EmptyState, SearchInput, Select, Button, Card, StatCard, Badge, Pagination, Modal, Input, Textarea, ConfirmDialog } from '../../components/ui';
+import { Plus, MapPin, Users, Layers, Edit, Trash2, RefreshCw, MoreVertical, Building2, Grid3X3 } from 'lucide-react';
+import { PageLoader, EmptyState, SearchInput, Select, Button, Card, StatCard, Pagination, Modal, Input, ConfirmDialog, ActionMenu } from '../../components/ui';
 import * as venueService from '../../services/venueService';
 
 export default function VenuesList() {
   const { authFetch } = useAuth();
+  const navigate = useNavigate();
   const [venues, setVenues] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ search: '', city: '' });
@@ -20,8 +21,21 @@ export default function VenuesList() {
   const [modal, setModal] = useState({ type: null, venue: null });
   const [form, setForm] = useState(venueService.DEFAULT_VENUE_FORM);
   const [saving, setSaving] = useState(false);
+  const [showCitySuggestions, setShowCitySuggestions] = useState(false);
 
-  const cities = ['Ho Chi Minh City', 'Hanoi', 'Da Nang', 'Can Tho', 'Hai Phong', 'Nha Trang'];
+  // Get unique cities from existing venues only
+  const allCities = React.useMemo(() => {
+    const venueCities = venues.map(v => v.city).filter(Boolean);
+    const uniqueCities = [...new Set(venueCities)];
+    return uniqueCities.sort((a, b) => a.localeCompare(b, 'vi'));
+  }, [venues]);
+
+  // Filter cities based on input for suggestions
+  const citySuggestions = React.useMemo(() => {
+    if (!form.city) return allCities.slice(0, 8);
+    const search = form.city.toLowerCase();
+    return allCities.filter(c => c.toLowerCase().includes(search)).slice(0, 8);
+  }, [form.city, allCities]);
 
   const fetchVenues = useCallback(async () => {
     try {
@@ -40,7 +54,7 @@ export default function VenuesList() {
 
   const openModal = (type, venue = null) => {
     setModal({ type, venue });
-    setForm(venue ? { ...venue, contact: venue.contact || {} } : venueService.DEFAULT_VENUE_FORM);
+    setForm(venue ? { ...venue } : venueService.DEFAULT_VENUE_FORM);
     setShowMenu(null);
   };
 
@@ -103,7 +117,7 @@ export default function VenuesList() {
         <div className="flex flex-col sm:flex-row gap-4">
           <SearchInput value={filters.search} onChange={e => setFilters(f => ({ ...f, search: e.target.value }))} placeholder="Search venues..." className="flex-1" />
           <Select value={filters.city} onChange={e => setFilters(f => ({ ...f, city: e.target.value }))}
-            options={[{ value: '', label: 'All Cities' }, ...cities.map(c => ({ value: c, label: c }))]} />
+            options={[{ value: '', label: 'All Cities' }, ...allCities.map(c => ({ value: c, label: c }))]} />
         </div>
       </Card>
 
@@ -114,7 +128,8 @@ export default function VenuesList() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {venues.map(venue => (
             <VenueCard key={venue._id} venue={venue} showMenu={showMenu} setShowMenu={setShowMenu}
-              onEdit={() => openModal('form', venue)} onDelete={() => openModal('delete', venue)} />
+              onEdit={() => openModal('form', venue)} onDelete={() => openModal('delete', venue)} 
+              onDesignSeats={() => navigate(`/venues/${venue._id}/designer`)} />
           ))}
         </div>
       )}
@@ -128,20 +143,48 @@ export default function VenuesList() {
         <form onSubmit={handleSave} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <Input label="Name *" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
-            <Select label="City *" value={form.city} onChange={e => setForm({ ...form, city: e.target.value })}
-              options={[{ value: '', label: 'Select city' }, ...cities.map(c => ({ value: c, label: c }))]} />
+            
+            {/* City with autocomplete */}
+            <div className="relative">
+              <Input 
+                label="City *" 
+                required 
+                value={form.city} 
+                onChange={e => setForm({ ...form, city: e.target.value })}
+                onFocus={() => setShowCitySuggestions(true)}
+                onBlur={() => setTimeout(() => setShowCitySuggestions(false), 200)}
+                placeholder="Type or select a city"
+                autoComplete="off"
+              />
+              {showCitySuggestions && citySuggestions.length > 0 && (
+                <div className="absolute z-50 w-full mt-1 bg-zinc-800 border border-white/10 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {citySuggestions.map((city, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        setForm({ ...form, city });
+                        setShowCitySuggestions(false);
+                      }}
+                    >
+                      {city}
+                    </button>
+                  ))}
+                  {form.city && !allCities.includes(form.city) && (
+                    <div className="px-3 py-2 text-xs text-gray-500 border-t border-white/10">
+                      Press Tab or click outside to add "{form.city}" as new city
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
           <Input label="Address *" required value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} />
           <div className="grid grid-cols-2 gap-4">
             <Input label="Capacity" type="number" value={form.total_capacity} onChange={e => setForm({ ...form, total_capacity: e.target.value })} />
-            <Input label="Google Maps URL" value={form.google_maps_url} onChange={e => setForm({ ...form, google_maps_url: e.target.value })} />
-          </div>
-          <Textarea label="Description" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={3} />
-          
-          <div className="grid grid-cols-3 gap-4">
-            <Input label="Phone" value={form.contact?.phone || ''} onChange={e => setForm({ ...form, contact: { ...form.contact, phone: e.target.value } })} />
-            <Input label="Email" value={form.contact?.email || ''} onChange={e => setForm({ ...form, contact: { ...form.contact, email: e.target.value } })} />
-            <Input label="Website" value={form.contact?.website || ''} onChange={e => setForm({ ...form, contact: { ...form.contact, website: e.target.value } })} />
+            <Input label="Google Maps URL" value={form.google_maps_url} onChange={e => setForm({ ...form, google_maps_url: e.target.value })} placeholder="https://maps.google.com/..." />
           </div>
 
           <div className="flex gap-3 pt-4">
@@ -159,44 +202,54 @@ export default function VenuesList() {
   );
 }
 
-const VenueCard = ({ venue, showMenu, setShowMenu, onEdit, onDelete }) => (
-  <Card className="overflow-hidden">
-    <div className="h-40 bg-gradient-to-br from-primary/20 to-blue-500/20 flex items-center justify-center">
-      <Building2 size={48} className="text-white/30" />
-    </div>
-    <div className="p-4">
-      <div className="flex items-start justify-between">
-        <div>
-          <h3 className="font-semibold text-white">{venue.name}</h3>
-          <div className="flex items-center gap-1 text-sm text-gray-400 mt-1">
-            <MapPin size={14} /> {venue.city}
+const VenueCard = ({ venue, showMenu, setShowMenu, onEdit, onDelete, onDesignSeats }) => {
+  const menuBtnRef = React.useRef(null);
+  const menuItems = [
+    { icon: Grid3X3, label: 'Design Seats', onClick: onDesignSeats },
+    { icon: Edit, label: 'Edit', onClick: onEdit },
+    { icon: Trash2, label: 'Delete', onClick: onDelete, variant: 'danger' }
+  ];
+
+  return (
+    <Card className="overflow-hidden">
+      <div className="h-40 bg-gradient-to-br from-primary/20 to-blue-500/20 flex items-center justify-center">
+        <Building2 size={48} className="text-white/30" />
+      </div>
+      <div className="p-4">
+        <div className="flex items-start justify-between">
+          <div>
+            <h3 className="font-semibold text-white">{venue.name}</h3>
+            <div className="flex items-center gap-1 text-sm text-gray-400 mt-1">
+              <MapPin size={14} /> {venue.city}
+            </div>
+          </div>
+          <div className="relative">
+            <button 
+              ref={menuBtnRef}
+              type="button"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowMenu(showMenu === venue._id ? null : venue._id); }} 
+              className="p-2 hover:bg-white/5 rounded-lg text-gray-400"
+            >
+              <MoreVertical size={16} />
+            </button>
+            <ActionMenu
+              isOpen={showMenu === venue._id}
+              onClose={() => setShowMenu(null)}
+              buttonRef={menuBtnRef}
+              items={menuItems}
+            />
           </div>
         </div>
-        <div className="relative">
-          <button onClick={() => setShowMenu(showMenu === venue._id ? null : venue._id)} className="p-2 hover:bg-white/5 rounded-lg text-gray-400">
-            <MoreVertical size={16} />
-          </button>
-          {showMenu === venue._id && (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setShowMenu(null)} />
-              <div className="absolute right-0 mt-1 w-40 bg-zinc-800 rounded-xl shadow-xl border border-white/10 z-20 overflow-hidden">
-                <Link to={`/venues/${venue._id}/seats`} className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5"><Layers size={14} /> Seat Chart</Link>
-                <button onClick={onEdit} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5"><Edit size={14} /> Edit</button>
-                <button onClick={onDelete} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10"><Trash2 size={14} /> Delete</button>
-              </div>
-            </>
-          )}
+        
+        <div className="mt-3 flex items-center gap-4 text-sm">
+          <div className="flex items-center gap-1 text-gray-400">
+            <Users size={14} /> {venue.total_capacity?.toLocaleString() || 0}
+          </div>
+          <div className="flex items-center gap-1 text-gray-400">
+            <Layers size={14} /> {venue.seatCount || 0} seats
+          </div>
         </div>
       </div>
-      
-      <div className="mt-3 flex items-center gap-4 text-sm">
-        <div className="flex items-center gap-1 text-gray-400">
-          <Users size={14} /> {venue.total_capacity?.toLocaleString() || 0}
-        </div>
-        <div className="flex items-center gap-1 text-gray-400">
-          <Layers size={14} /> {venue.zones?.length || 0} zones
-        </div>
-      </div>
-    </div>
-  </Card>
-);
+    </Card>
+  );
+};

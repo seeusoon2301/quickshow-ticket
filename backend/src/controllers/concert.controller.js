@@ -1,13 +1,19 @@
 import Concert from '../models/Concert.js';
+import Category from '../models/Category.js';
 import TicketClass from '../models/TicketClass.js';
 import ShowSeat from '../models/ShowSeat.js';
 import Seat from '../models/Seat.js';
-import Zone from '../models/Zone.js';
+import Venue from '../models/Venue.js';
 import { ApiError } from '../middleware/errorHandler.js';
 
 /**
  * Concert Controller
  * Handles concert/event management
+ * 
+ * NEW STRUCTURE:
+ * - Seats belong to Venues directly
+ * - TicketClasses belong to Concerts (pricing tiers with colors)
+ * - ShowSeat links Seat + Concert + TicketClass (seat assignment/painting)
  */
 
 /**
@@ -26,8 +32,6 @@ export const getConcerts = async (req, res, next) => {
       search,
       startDate,
       endDate,
-      minPrice,
-      maxPrice,
       venue,
       artist,
       featured,
@@ -38,49 +42,44 @@ export const getConcerts = async (req, res, next) => {
 
     const query = {};
 
-    // For public, only show published concerts
+    // For public (no user or customer), only show published concerts
     if (!req.user || req.user.role === 'CUS') {
       query.status = 'PUB';
-    } else if (status) {
-      query.status = status;
+      query.start_time = { $gte: new Date() };
+    } else {
+      if (status && status !== 'all') {
+        query.status = status;
+      }
     }
 
-    // Category filter
     if (category) {
-      query.category = category;
+      if (category.match(/^[0-9a-fA-F]{24}$/)) {
+        query.category = category;
+      } else {
+        const cat = await Category.findOne({ slug: category });
+        if (cat) query.category = cat._id;
+      }
     }
 
-    // Genre filter
     if (genre) {
       query.genre = { $regex: genre, $options: 'i' };
     }
 
-    // Text search
     if (search) {
-      query.$text = { $search: search };
+      query.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } }
+      ];
     }
 
-    // Date range
     if (startDate || endDate) {
-      query.start_time = {};
+      query.start_time = query.start_time || {};
       if (startDate) query.start_time.$gte = new Date(startDate);
       if (endDate) query.start_time.$lte = new Date(endDate);
-    } else {
-      // Default: only upcoming events
-      query.start_time = { $gte: new Date() };
     }
 
-    // Venue filter
-    if (venue) {
-      query.venue = venue;
-    }
-
-    // Artist filter
-    if (artist) {
-      query.artists = artist;
-    }
-
-    // Featured/Trending
+    if (venue) query.venue = venue;
+    if (artist) query.artists = artist;
     if (featured === 'true') query.featured = true;
     if (trending === 'true') query.trending = true;
 
@@ -89,8 +88,9 @@ export const getConcerts = async (req, res, next) => {
 
     const [concerts, total] = await Promise.all([
       Concert.find(query)
+        .populate('category', 'name slug icon color')
         .populate('venue', 'name address city')
-        .populate('artists', 'name image genre')
+        .populate('artists', 'name bio')
         .populate('organizer', 'username organizer.company_name')
         .sort(sort)
         .skip(skip)
@@ -113,6 +113,7 @@ export const getConcerts = async (req, res, next) => {
             _id: tc._id,
             name: tc.name,
             price: tc.price,
+            color: tc.color,
             available: tc.available_qty
           }))
         };
@@ -144,6 +145,7 @@ export const getConcerts = async (req, res, next) => {
 export const getConcertById = async (req, res, next) => {
   try {
     const concert = await Concert.findById(req.params.id)
+      .populate('category', 'name slug icon color')
       .populate('venue')
       .populate('artists')
       .populate('organizer', 'username fullName organizer');
@@ -156,25 +158,16 @@ export const getConcertById = async (req, res, next) => {
     concert.viewCount += 1;
     await concert.save();
 
-    // Get ticket classes
+    // Get ticket classes (pricing tiers)
     const ticketClasses = await TicketClass.find({ concert: concert._id })
-      .populate('zone', 'name color capacity');
+      .sort({ sortOrder: 1, price: -1 });
 
-    // Get seat availability summary by zone
+    // Get seat availability summary by ticket class
     const seatStats = await ShowSeat.aggregate([
       { $match: { concert: concert._id } },
       {
-        $lookup: {
-          from: 'seats',
-          localField: 'seat',
-          foreignField: '_id',
-          as: 'seatInfo'
-        }
-      },
-      { $unwind: '$seatInfo' },
-      {
         $group: {
-          _id: '$seatInfo.zone',
+          _id: '$ticketClass',
           total: { $sum: 1 },
           available: {
             $sum: { $cond: [{ $eq: ['$status', 'AVAILABLE'] }, 1, 0] }
@@ -189,12 +182,22 @@ export const getConcertById = async (req, res, next) => {
       }
     ]);
 
+    // Merge stats with ticket classes
+    const ticketClassesWithStats = ticketClasses.map(tc => {
+      const stats = seatStats.find(s => s._id?.toString() === tc._id.toString()) || {
+        total: 0, available: 0, sold: 0, locked: 0
+      };
+      return {
+        ...tc.toObject(),
+        seatStats: stats
+      };
+    });
+
     res.json({
       success: true,
       data: {
         concert,
-        ticketClasses,
-        seatStats
+        ticketClasses: ticketClassesWithStats
       }
     });
   } catch (error) {
@@ -221,18 +224,13 @@ export const createConcert = async (req, res, next) => {
       thumbnail,
       images,
       policies,
-      ticketClasses // Array of ticket class definitions
+      ticketClasses // Array of { name, price, color, description, benefits }
     } = req.body;
 
     // Verify venue exists
-    const venueDoc = await Zone.findOne({ venue }).distinct('venue');
+    const venueDoc = await Venue.findById(venue);
     if (!venueDoc) {
-      // Check if venue ID is valid
-      const Venue = (await import('../models/Venue.js')).default;
-      const venueExists = await Venue.findById(venue);
-      if (!venueExists) {
-        throw new ApiError(404, 'Venue not found');
-      }
+      throw new ApiError(404, 'Venue not found');
     }
 
     // Create concert
@@ -254,48 +252,25 @@ export const createConcert = async (req, res, next) => {
 
     // Create ticket classes if provided
     if (ticketClasses && ticketClasses.length > 0) {
-      const zones = await Zone.find({ venue });
-      
-      for (const tc of ticketClasses) {
-        const zone = zones.find(z => z.name === tc.zoneName || z._id.toString() === tc.zone);
-        if (!zone) continue;
-
+      for (let i = 0; i < ticketClasses.length; i++) {
+        const tc = ticketClasses[i];
         await TicketClass.create({
           concert: concert._id,
-          zone: zone._id,
           name: tc.name,
+          color: tc.color || '#3B82F6',
           price: tc.price,
-          quota: tc.quota || zone.capacity,
+          quota: tc.quota || 0, // Will be set when seats are assigned
           open_time: tc.open_time,
           close_time: tc.close_time,
           description: tc.description,
-          benefits: tc.benefits || []
+          benefits: tc.benefits || [],
+          sortOrder: i
         });
       }
-
-      // Initialize show seats for the concert
-      const seats = await Seat.find({ zone: { $in: zones.map(z => z._id) } });
-      
-      const showSeats = seats.map(seat => {
-        const zone = zones.find(z => z._id.toString() === seat.zone.toString());
-        const ticketClass = ticketClasses.find(tc => 
-          tc.zoneName === zone?.name || tc.zone === zone?._id.toString()
-        );
-        
-        return {
-          concert: concert._id,
-          seat: seat._id,
-          status: 'AVAILABLE',
-          price: ticketClass?.price || 0
-        };
-      });
-
-      if (showSeats.length > 0) {
-        await ShowSeat.insertMany(showSeats);
-        concert.totalTickets = showSeats.length;
-        await concert.save();
-      }
     }
+
+    // Note: ShowSeats are created when admin "paints" seats with ticket classes
+    // via the Event Zone Painter
 
     res.status(201).json({
       success: true,
@@ -331,7 +306,6 @@ export const updateConcert = async (req, res, next) => {
       'policies', 'artists', 'featured', 'trending'
     ];
 
-    // Admin can also update status
     if (req.user.role === 'ADMIN') {
       allowedUpdates.push('status', 'venue');
     }
@@ -347,7 +321,7 @@ export const updateConcert = async (req, res, next) => {
       req.params.id,
       updates,
       { new: true, runValidators: true }
-    ).populate('venue artists organizer');
+    ).populate('category venue artists organizer');
 
     res.json({
       success: true,
@@ -372,7 +346,6 @@ export const deleteConcert = async (req, res, next) => {
       throw new ApiError(404, 'Concert not found');
     }
 
-    // Check if there are sold tickets
     const soldSeats = await ShowSeat.countDocuments({
       concert: concert._id,
       status: 'SOLD'
@@ -382,7 +355,6 @@ export const deleteConcert = async (req, res, next) => {
       throw new ApiError(400, 'Cannot delete concert with sold tickets. Cancel it instead.');
     }
 
-    // Delete related data
     await Promise.all([
       TicketClass.deleteMany({ concert: concert._id }),
       ShowSeat.deleteMany({ concert: concert._id }),
@@ -399,7 +371,7 @@ export const deleteConcert = async (req, res, next) => {
 };
 
 /**
- * @desc    Get concert seats/seating map
+ * @desc    Get concert seats/seating map with ticket class colors
  * @route   GET /api/concerts/:id/seats
  * @access  Public
  */
@@ -411,53 +383,213 @@ export const getConcertSeats = async (req, res, next) => {
       throw new ApiError(404, 'Concert not found');
     }
 
-    // Get zones for this venue
-    const zones = await Zone.find({ venue: concert.venue._id });
+    // Get all venue seats
+    const venueSeats = await Seat.find({ venue: concert.venue._id });
 
-    // Get all show seats with seat info
+    // Get ticket classes for this concert
+    const ticketClasses = await TicketClass.find({ concert: concert._id });
+
+    // Get show seats (seat assignments)
     const showSeats = await ShowSeat.find({ concert: concert._id })
-      .populate({
-        path: 'seat',
-        populate: { path: 'zone', select: 'name color' }
-      })
-      .populate('ticketClass', 'name price');
+      .populate('seat')
+      .populate('ticketClass', 'name price color');
 
-    // Group by zone
-    const seatMap = {};
-    zones.forEach(zone => {
-      seatMap[zone._id] = {
-        zone: {
-          _id: zone._id,
-          name: zone.name,
-          color: zone.color,
-          capacity: zone.capacity
-        },
-        seats: []
-      };
+    // Create a map for quick lookup
+    const showSeatMap = {};
+    showSeats.forEach(ss => {
+      showSeatMap[ss.seat._id.toString()] = ss;
     });
 
-    showSeats.forEach(ss => {
-      const zoneId = ss.seat.zone._id.toString();
-      if (seatMap[zoneId]) {
-        seatMap[zoneId].seats.push({
-          _id: ss._id,
-          seatId: ss.seat._id,
-          row: ss.seat.row,
-          number: ss.seat.number,
-          label: ss.seat.label,
-          status: ss.status,
-          price: ss.price || ss.ticketClass?.price,
-          ticketClass: ss.ticketClass?.name
-        });
-      }
+    // Build seat map with assignment info
+    const seatMap = venueSeats.map(seat => {
+      const showSeat = showSeatMap[seat._id.toString()];
+      return {
+        _id: seat._id,
+        row: seat.row,
+        number: seat.number,
+        label: seat.label,
+        x: seat.x,
+        y: seat.y,
+        rotation: seat.rotation,
+        seatType: seat.seatType,
+        isActive: seat.isActive,
+        // Show seat assignment info (if assigned to this concert)
+        showSeatId: showSeat?._id,
+        status: showSeat?.status || 'UNASSIGNED',
+        ticketClass: showSeat?.ticketClass ? {
+          _id: showSeat.ticketClass._id,
+          name: showSeat.ticketClass.name,
+          price: showSeat.ticketClass.price,
+          color: showSeat.ticketClass.color
+        } : null,
+        price: showSeat?.price || showSeat?.ticketClass?.price || 0
+      };
     });
 
     res.json({
       success: true,
       data: {
-        venue: concert.venue,
-        zones: Object.values(seatMap)
+        venue: {
+          _id: concert.venue._id,
+          name: concert.venue.name,
+          total_capacity: concert.venue.total_capacity
+        },
+        ticketClasses,
+        seats: seatMap,
+        stats: {
+          total: venueSeats.length,
+          assigned: showSeats.length,
+          unassigned: venueSeats.length - showSeats.length,
+          available: showSeats.filter(ss => ss.status === 'AVAILABLE').length,
+          sold: showSeats.filter(ss => ss.status === 'SOLD').length,
+          locked: showSeats.filter(ss => ss.status === 'LOCKED').length
+        }
       }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Assign seats to ticket class ("paint" seats)
+ * @route   POST /api/concerts/:id/assign-seats
+ * @access  Admin, Organizer
+ */
+export const assignSeatsToTicketClass = async (req, res, next) => {
+  try {
+    const { ticketClassId, seatIds } = req.body;
+
+    const concert = await Concert.findById(req.params.id);
+    if (!concert) {
+      throw new ApiError(404, 'Concert not found');
+    }
+
+    // Check ownership for organizers
+    if (req.user.role === 'ORG' && concert.organizer.toString() !== req.user._id.toString()) {
+      throw new ApiError(403, 'You can only update your own concerts');
+    }
+
+    const ticketClass = await TicketClass.findOne({
+      _id: ticketClassId,
+      concert: concert._id
+    });
+
+    if (!ticketClass) {
+      throw new ApiError(404, 'Ticket class not found');
+    }
+
+    // Verify all seats belong to the concert's venue
+    const seats = await Seat.find({
+      _id: { $in: seatIds },
+      venue: concert.venue
+    });
+
+    if (seats.length !== seatIds.length) {
+      throw new ApiError(400, 'Some seats do not belong to this venue');
+    }
+
+    // Create or update show seats
+    const operations = seatIds.map(seatId => ({
+      updateOne: {
+        filter: { concert: concert._id, seat: seatId },
+        update: {
+          $set: {
+            ticketClass: ticketClass._id,
+            price: ticketClass.price,
+            status: 'AVAILABLE'
+          }
+        },
+        upsert: true
+      }
+    }));
+
+    await ShowSeat.bulkWrite(operations);
+
+    // Update ticket class quota
+    const assignedCount = await ShowSeat.countDocuments({
+      concert: concert._id,
+      ticketClass: ticketClass._id
+    });
+    ticketClass.quota = assignedCount;
+    await ticketClass.save();
+
+    // Update concert total tickets
+    const totalAssigned = await ShowSeat.countDocuments({ concert: concert._id });
+    concert.totalTickets = totalAssigned;
+    await concert.save();
+
+    res.json({
+      success: true,
+      message: `Assigned ${seatIds.length} seats to ${ticketClass.name}`,
+      data: {
+        ticketClass: {
+          ...ticketClass.toObject(),
+          quota: assignedCount
+        },
+        totalAssigned
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Remove seat assignments (unassign from ticket class)
+ * @route   DELETE /api/concerts/:id/assign-seats
+ * @access  Admin, Organizer
+ */
+export const unassignSeats = async (req, res, next) => {
+  try {
+    const { seatIds } = req.body;
+
+    const concert = await Concert.findById(req.params.id);
+    if (!concert) {
+      throw new ApiError(404, 'Concert not found');
+    }
+
+    if (req.user.role === 'ORG' && concert.organizer.toString() !== req.user._id.toString()) {
+      throw new ApiError(403, 'You can only update your own concerts');
+    }
+
+    // Check if any seats are sold
+    const soldSeats = await ShowSeat.countDocuments({
+      concert: concert._id,
+      seat: { $in: seatIds },
+      status: 'SOLD'
+    });
+
+    if (soldSeats > 0) {
+      throw new ApiError(400, 'Cannot unassign seats that have been sold');
+    }
+
+    // Delete show seats
+    const result = await ShowSeat.deleteMany({
+      concert: concert._id,
+      seat: { $in: seatIds }
+    });
+
+    // Update ticket class quotas
+    const ticketClasses = await TicketClass.find({ concert: concert._id });
+    for (const tc of ticketClasses) {
+      const count = await ShowSeat.countDocuments({
+        concert: concert._id,
+        ticketClass: tc._id
+      });
+      tc.quota = count;
+      await tc.save();
+    }
+
+    // Update concert total
+    const totalAssigned = await ShowSeat.countDocuments({ concert: concert._id });
+    concert.totalTickets = totalAssigned;
+    await concert.save();
+
+    res.json({
+      success: true,
+      message: `Unassigned ${result.deletedCount} seats`,
+      data: { deletedCount: result.deletedCount }
     });
   } catch (error) {
     next(error);
@@ -479,6 +611,12 @@ export const publishConcert = async (req, res, next) => {
 
     if (concert.status === 'PUB') {
       throw new ApiError(400, 'Concert is already published');
+    }
+
+    // Check if seats are assigned
+    const assignedSeats = await ShowSeat.countDocuments({ concert: concert._id });
+    if (assignedSeats === 0) {
+      throw new ApiError(400, 'Cannot publish concert without assigning seats to ticket classes');
     }
 
     concert.status = 'PUB';
@@ -509,8 +647,6 @@ export const cancelConcert = async (req, res, next) => {
 
     concert.status = 'CANCEL';
     await concert.save();
-
-    // TODO: Notify customers, process refunds
 
     res.json({
       success: true,
@@ -597,6 +733,147 @@ export const getFeaturedConcerts = async (req, res, next) => {
   }
 };
 
+/**
+ * @desc    Add ticket class to concert
+ * @route   POST /api/concerts/:id/ticket-classes
+ * @access  Admin, Organizer
+ */
+export const addTicketClass = async (req, res, next) => {
+  try {
+    const concert = await Concert.findById(req.params.id);
+
+    if (!concert) {
+      throw new ApiError(404, 'Concert not found');
+    }
+
+    if (req.user.role === 'ORG' && concert.organizer.toString() !== req.user._id.toString()) {
+      throw new ApiError(403, 'You can only update your own concerts');
+    }
+
+    const { name, color, price, description, benefits, open_time, close_time } = req.body;
+
+    // Get max sortOrder
+    const maxOrder = await TicketClass.findOne({ concert: concert._id })
+      .sort({ sortOrder: -1 })
+      .select('sortOrder');
+
+    const ticketClass = await TicketClass.create({
+      concert: concert._id,
+      name,
+      color: color || '#3B82F6',
+      price,
+      quota: 0,
+      description,
+      benefits: benefits || [],
+      open_time,
+      close_time,
+      sortOrder: (maxOrder?.sortOrder || 0) + 1
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Ticket class created',
+      data: ticketClass
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Update ticket class
+ * @route   PUT /api/concerts/:id/ticket-classes/:ticketClassId
+ * @access  Admin, Organizer
+ */
+export const updateTicketClass = async (req, res, next) => {
+  try {
+    const concert = await Concert.findById(req.params.id);
+
+    if (!concert) {
+      throw new ApiError(404, 'Concert not found');
+    }
+
+    if (req.user.role === 'ORG' && concert.organizer.toString() !== req.user._id.toString()) {
+      throw new ApiError(403, 'You can only update your own concerts');
+    }
+
+    const ticketClass = await TicketClass.findOneAndUpdate(
+      { _id: req.params.ticketClassId, concert: concert._id },
+      req.body,
+      { new: true, runValidators: true }
+    );
+
+    if (!ticketClass) {
+      throw new ApiError(404, 'Ticket class not found');
+    }
+
+    // Update prices in ShowSeats if price changed
+    if (req.body.price !== undefined) {
+      await ShowSeat.updateMany(
+        { concert: concert._id, ticketClass: ticketClass._id },
+        { price: req.body.price }
+      );
+    }
+
+    res.json({
+      success: true,
+      message: 'Ticket class updated',
+      data: ticketClass
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Delete ticket class
+ * @route   DELETE /api/concerts/:id/ticket-classes/:ticketClassId
+ * @access  Admin, Organizer
+ */
+export const deleteTicketClass = async (req, res, next) => {
+  try {
+    const concert = await Concert.findById(req.params.id);
+
+    if (!concert) {
+      throw new ApiError(404, 'Concert not found');
+    }
+
+    if (req.user.role === 'ORG' && concert.organizer.toString() !== req.user._id.toString()) {
+      throw new ApiError(403, 'You can only update your own concerts');
+    }
+
+    // Check if any seats are sold with this ticket class
+    const soldSeats = await ShowSeat.countDocuments({
+      concert: concert._id,
+      ticketClass: req.params.ticketClassId,
+      status: 'SOLD'
+    });
+
+    if (soldSeats > 0) {
+      throw new ApiError(400, 'Cannot delete ticket class with sold seats');
+    }
+
+    // Unassign seats from this ticket class
+    await ShowSeat.deleteMany({
+      concert: concert._id,
+      ticketClass: req.params.ticketClassId
+    });
+
+    // Delete ticket class
+    await TicketClass.findOneAndDelete({
+      _id: req.params.ticketClassId,
+      concert: concert._id
+    });
+
+    res.json({
+      success: true,
+      message: 'Ticket class deleted'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default {
   getConcerts,
   getConcertById,
@@ -604,8 +881,13 @@ export default {
   updateConcert,
   deleteConcert,
   getConcertSeats,
+  assignSeatsToTicketClass,
+  unassignSeats,
   publishConcert,
   cancelConcert,
   getMyConcerts,
-  getFeaturedConcerts
+  getFeaturedConcerts,
+  addTicketClass,
+  updateTicketClass,
+  deleteTicketClass
 };

@@ -25,15 +25,7 @@ const venueSchema = new mongoose.Schema({
   map_image: {
     type: String // URL to venue seating map image
   },
-  description: {
-    type: String
-  },
-  facilities: [String], // Parking, Food court, etc.
-  google_maps_url: String,
-  contact: {
-    phone: String,
-    email: String
-  }
+  google_maps_url: String
 }, { timestamps: true });
 
 venueSchema.index({ name: 'text', address: 'text' });

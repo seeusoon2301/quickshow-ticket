@@ -3,31 +3,31 @@
  * 
  * Based on ERD with 12 entities
  * 
- * ENTITY RELATIONSHIPS:
- * =====================
+ * ENTITY RELATIONSHIPS (UPDATED):
+ * ================================
  * 
  * User (base for all roles)
  *   └── customer, staff, organizer, admin (embedded fields)
  * 
  * Venue
- *   └── Zone (1:N)
- *         └── Seat (1:N)
+ *   └── Seat (1:N) - Physical seat layout template
  * 
- * Concert
+ * Concert (Event)
  *   ├── Venue (N:1)
  *   ├── Organizer/User (N:1)
  *   ├── Artist (N:M)
- *   ├── TicketClass (1:N)
- *   └── ShowSeat (1:N)
+ *   ├── TicketClass (1:N) - Pricing tiers with colors
+ *   └── ShowSeat (1:N) - Seat assignments for this event
  * 
  * TicketClass
  *   ├── Concert (N:1)
- *   ├── Zone (N:1)
+ *   ├── color - For visual "painting" of seats
  *   └── Ticket (1:N)
  * 
- * ShowSeat
+ * ShowSeat ("Painted" seat assignment)
  *   ├── Concert (N:1)
- *   ├── Seat (N:1)
+ *   ├── Seat (N:1) - From venue's seat layout
+ *   ├── TicketClass (N:1) - Which pricing tier
  *   └── Ticket (1:1)
  * 
  * Order
@@ -48,6 +48,7 @@ import Venue from './Venue.js';
 import Zone from './Zone.js';
 import Seat from './Seat.js';
 import Concert from './Concert.js';
+import Category from './Category.js';
 import TicketClass from './TicketClass.js';
 import ShowSeat from './ShowSeat.js';
 import Ticket from './Ticket.js';
@@ -63,6 +64,7 @@ export {
   Zone,
   Seat,
   Concert,
+  Category,
   TicketClass,
   ShowSeat,
   Ticket,
@@ -79,6 +81,7 @@ export default {
   Zone,
   Seat,
   Concert,
+  Category,
   TicketClass,
   ShowSeat,
   Ticket,

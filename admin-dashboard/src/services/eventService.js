@@ -74,6 +74,83 @@ export const cancelConcert = async (authFetch, concertId) => {
 };
 
 /**
+ * Get concert seats with ticket class assignments
+ */
+export const getConcertSeats = async (authFetch, concertId) => {
+  const response = await authFetch(`${API_URL}/concerts/${concertId}/seats`);
+  return handleResponse(response);
+};
+
+// =============================================================================
+// TICKET CLASS MANAGEMENT
+// =============================================================================
+
+/**
+ * Add a ticket class to a concert
+ */
+export const addTicketClass = async (authFetch, concertId, ticketClassData) => {
+  const response = await authFetch(`${API_URL}/concerts/${concertId}/ticket-classes`, {
+    method: 'POST',
+    body: JSON.stringify(ticketClassData),
+  });
+  return handleResponse(response);
+};
+
+/**
+ * Update a ticket class
+ */
+export const updateTicketClass = async (authFetch, concertId, ticketClassId, ticketClassData) => {
+  const response = await authFetch(`${API_URL}/concerts/${concertId}/ticket-classes/${ticketClassId}`, {
+    method: 'PUT',
+    body: JSON.stringify(ticketClassData),
+  });
+  return handleResponse(response);
+};
+
+/**
+ * Delete a ticket class
+ */
+export const deleteTicketClass = async (authFetch, concertId, ticketClassId) => {
+  const response = await authFetch(`${API_URL}/concerts/${concertId}/ticket-classes/${ticketClassId}`, {
+    method: 'DELETE',
+  });
+  return handleResponse(response);
+};
+
+// =============================================================================
+// SEAT ASSIGNMENT (PAINTING)
+// =============================================================================
+
+/**
+ * Assign seats to a ticket class ("paint" seats with a color)
+ * @param {Function} authFetch - Authenticated fetch function
+ * @param {string} concertId - Concert ID
+ * @param {string} ticketClassId - Ticket class ID to assign seats to
+ * @param {string[]} seatIds - Array of seat IDs to assign
+ */
+export const assignSeatsToTicketClass = async (authFetch, concertId, ticketClassId, seatIds) => {
+  const response = await authFetch(`${API_URL}/concerts/${concertId}/assign-seats`, {
+    method: 'POST',
+    body: JSON.stringify({ ticketClassId, seatIds }),
+  });
+  return handleResponse(response);
+};
+
+/**
+ * Unassign seats from their ticket classes (remove "paint")
+ * @param {Function} authFetch - Authenticated fetch function
+ * @param {string} concertId - Concert ID
+ * @param {string[]} seatIds - Array of seat IDs to unassign
+ */
+export const unassignSeats = async (authFetch, concertId, seatIds) => {
+  const response = await authFetch(`${API_URL}/concerts/${concertId}/unassign-seats`, {
+    method: 'POST',
+    body: JSON.stringify({ seatIds }),
+  });
+  return handleResponse(response);
+};
+
+/**
  * Status configuration
  */
 export const STATUS_CONFIG = {

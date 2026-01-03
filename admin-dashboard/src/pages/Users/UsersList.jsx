@@ -4,13 +4,13 @@
  * ~200 lines instead of 895
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
 import { Plus, Users, Building2, UserCog, User, RefreshCw, Edit, Trash2, Ban, UserCheck, Key, Mail, MoreVertical } from 'lucide-react';
 
 // Shared UI Components
-import { PageLoader, EmptyState, SearchInput, Select, Button, Card, StatCard, Badge, Pagination, Modal, ConfirmDialog, Input } from '../../components/ui';
+import { PageLoader, EmptyState, SearchInput, Select, Button, Card, StatCard, Badge, Pagination, Modal, ConfirmDialog, Input, ActionMenu } from '../../components/ui';
 
 // API Service
 import * as userService from '../../services/userService';
@@ -289,6 +289,23 @@ const UsersList = () => {
 
 const UserRow = ({ user, getRoleBadge, getStatusBadge, onEdit, onDelete, onResetPassword, onToggleStatus }) => {
   const [showMenu, setShowMenu] = useState(false);
+  const menuBtnRef = React.useRef(null);
+
+  const menuItems = [
+    { icon: Edit, label: 'Edit User', onClick: onEdit },
+    { icon: Key, label: 'Reset Password', onClick: onResetPassword },
+    { icon: Mail, label: 'Send Email', onClick: () => {} },
+  ];
+
+  if (user.role !== 'ADMIN') {
+    menuItems.push({
+      icon: user.status ? Ban : UserCheck,
+      label: user.status ? 'Lock Account' : 'Unlock Account',
+      onClick: onToggleStatus,
+      variant: user.status ? 'danger' : undefined
+    });
+    menuItems.push({ icon: Trash2, label: 'Delete User', onClick: onDelete, variant: 'danger' });
+  }
 
   return (
     <tr className="hover:bg-white/5 transition-colors">
@@ -310,41 +327,25 @@ const UserRow = ({ user, getRoleBadge, getStatusBadge, onEdit, onDelete, onReset
       <td className="px-5 py-4 text-sm text-gray-400">{new Date(user.createdAt).toLocaleDateString()}</td>
       <td className="px-5 py-4">
         <div className="relative">
-          <button onClick={() => setShowMenu(!showMenu)} className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg">
+          <button 
+            ref={menuBtnRef}
+            type="button"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowMenu(!showMenu); }} 
+            className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg"
+          >
             <MoreVertical size={16} />
           </button>
-          {showMenu && (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
-              <div className="absolute right-0 mt-1 w-48 bg-zinc-800 rounded-xl shadow-xl border border-white/10 z-20 overflow-hidden">
-                <MenuButton icon={Edit} label="Edit User" onClick={() => { onEdit(); setShowMenu(false); }} />
-                <MenuButton icon={Key} label="Reset Password" onClick={() => { onResetPassword(); setShowMenu(false); }} />
-                <MenuButton icon={Mail} label="Send Email" onClick={() => setShowMenu(false)} />
-                {user.role !== 'ADMIN' && (
-                  <>
-                    <MenuButton 
-                      icon={user.status ? Ban : UserCheck} 
-                      label={user.status ? 'Lock Account' : 'Unlock Account'} 
-                      onClick={() => { onToggleStatus(); setShowMenu(false); }}
-                      className={user.status ? 'text-red-400 hover:bg-red-500/10' : 'text-emerald-400 hover:bg-emerald-500/10'}
-                    />
-                    <MenuButton icon={Trash2} label="Delete User" onClick={() => { onDelete(); setShowMenu(false); }} className="text-red-400 hover:bg-red-500/10" />
-                  </>
-                )}
-              </div>
-            </>
-          )}
+          <ActionMenu
+            isOpen={showMenu}
+            onClose={() => setShowMenu(false)}
+            buttonRef={menuBtnRef}
+            items={menuItems}
+          />
         </div>
       </td>
     </tr>
   );
 };
-
-const MenuButton = ({ icon: Icon, label, onClick, className = 'text-gray-300 hover:bg-white/5 hover:text-white' }) => (
-  <button onClick={onClick} className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm transition-colors ${className}`}>
-    <Icon size={14} /> {label}
-  </button>
-);
 
 const UserFormModal = ({ isOpen, isEdit, user, formData, setFormData, onSubmit, onClose, loading }) => {
   if (!isOpen) return null;

@@ -14,9 +14,9 @@ const concertSchema = new mongoose.Schema({
     maxlength: 5000
   },
   category: {
-    type: String,
-    enum: ['music', 'theater', 'sport', 'other'],
-    default: 'music'
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Category',
+    required: true
   },
   genre: {
     type: String, // pop, rock, jazz, EDM, classical, etc.

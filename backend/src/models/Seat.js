@@ -1,12 +1,14 @@
 import mongoose from 'mongoose';
 
 /**
- * Seat Model - Physical seats within a zone
+ * Seat Model - Physical seats within a VENUE
+ * This is the seat layout template for the venue.
+ * Seats are assigned to TicketClasses per event via ShowSeat.
  */
 const seatSchema = new mongoose.Schema({
-  zone: {
+  venue: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Zone',
+    ref: 'Venue',
     required: true
   },
   row: {
@@ -19,20 +21,28 @@ const seatSchema = new mongoose.Schema({
     required: true,
     min: 1
   },
-  type: {
+  label: {
+    type: String, // Custom label like "A1", "VIP-1", etc.
+    trim: true
+  },
+  seatType: {
     type: String,
-    enum: ['NORMAL', 'VIP', 'WHEELCHAIR', 'RESTRICTED'],
-    default: 'NORMAL'
-  }
+    enum: ['NORMAL', 'WHEELCHAIR', 'RESTRICTED'],
+    default: 'NORMAL' // Physical seat type (accessibility, etc.)
+  },
+  isActive: {
+    type: Boolean,
+    default: true // Can be deactivated for maintenance
+  },
+  // Visual position on canvas (in pixels)
+  x: { type: Number, default: 0 },
+  y: { type: Number, default: 0 },
+  rotation: { type: Number, default: 0 } // Rotation angle in degrees
 }, { timestamps: true });
 
-// Compound unique index: each seat is unique within a zone
-seatSchema.index({ zone: 1, row: 1, number: 1 }, { unique: true });
-
-// Virtual for display label
-seatSchema.virtual('label').get(function() {
-  return `${this.row}${this.number}`;
-});
+// Compound unique index: each seat is unique within a venue
+seatSchema.index({ venue: 1, row: 1, number: 1 }, { unique: true });
+seatSchema.index({ venue: 1 }); // For fetching all seats of a venue
 
 // Enable virtuals in JSON
 seatSchema.set('toJSON', { virtuals: true });

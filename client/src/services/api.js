@@ -31,6 +31,15 @@ const fetchAPI = async (endpoint, options = {}) => {
   return response.json();
 };
 
+// ==================== CATEGORIES ====================
+export const categoryAPI = {
+  // Get all active categories
+  getAll: () => fetchAPI("/categories"),
+
+  // Get category by ID or slug
+  getByIdOrSlug: (idOrSlug) => fetchAPI(`/categories/${idOrSlug}`),
+};
+
 // ==================== EVENTS / CONCERTS ====================
 export const eventAPI = {
   // Get all events (concerts)
@@ -200,6 +209,7 @@ export const authAPI = {
 };
 
 export default {
+  category: categoryAPI,
   event: eventAPI,
   ticket: ticketAPI,
   order: orderAPI,

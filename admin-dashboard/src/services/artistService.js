@@ -54,35 +54,17 @@ export const deleteArtist = async (authFetch, artistId) => {
 };
 
 /**
- * Default artist form
+ * Default artist form - simplified
  */
 export const DEFAULT_ARTIST_FORM = {
   name: '',
-  bio: '',
-  genre: [],
-  image: '',
-  social: {
-    facebook: '',
-    instagram: '',
-    twitter: '',
-    youtube: '',
-    website: '',
-  },
+  bio: ''
 };
 
 /**
- * Genre options
+ * Get artist initials for avatar placeholder
  */
-export const GENRES = [
-  'Pop', 'Rock', 'Hip-hop', 'R&B', 'Jazz', 'Classical', 
-  'EDM', 'Country', 'Folk', 'Indie', 'Metal', 'K-pop',
-  'V-pop', 'Ballad', 'Rap', 'Acoustic', 'Alternative'
-];
-
-/**
- * Get artist avatar
- */
-export const getArtistAvatar = (artist) => {
-  if (artist.image) return artist.image;
-  return `https://ui-avatars.com/api/?name=${encodeURIComponent(artist.name)}&background=8B5CF6&color=fff`;
+export const getArtistInitials = (artist) => {
+  if (!artist?.name) return '?';
+  return artist.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
 };

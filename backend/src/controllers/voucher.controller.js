@@ -29,7 +29,7 @@ export const getVouchers = async (req, res, next) => {
 
     const [vouchers, total] = await Promise.all([
       Voucher.find(query)
-        .populate('applicable_concerts', 'title')
+        .populate('concerts', 'title')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit)),
@@ -62,7 +62,7 @@ export const getVoucherByCode = async (req, res, next) => {
   try {
     const voucher = await Voucher.findOne({ 
       code: req.params.code.toUpperCase() 
-    }).populate('applicable_concerts', 'title');
+    }).populate('concerts', 'title');
 
     if (!voucher) {
       throw new ApiError(404, 'Voucher not found');
@@ -125,8 +125,8 @@ export const validateVoucher = async (req, res, next) => {
     }
 
     // Check applicable concerts
-    if (voucher.applicable_concerts && voucher.applicable_concerts.length > 0) {
-      if (!voucher.applicable_concerts.includes(concertId)) {
+    if (voucher.concerts && voucher.concerts.length > 0) {
+      if (!voucher.concerts.includes(concertId)) {
         return res.json({
           success: false,
           valid: false,
@@ -191,7 +191,7 @@ export const createVoucher = async (req, res, next) => {
       max_uses,
       valid_from,
       valid_until,
-      applicable_concerts,
+      concerts,
       description
     } = req.body;
 
@@ -210,7 +210,7 @@ export const createVoucher = async (req, res, next) => {
       max_uses,
       valid_from,
       valid_until,
-      applicable_concerts,
+      concerts,
       description,
       created_by: req.user._id
     });

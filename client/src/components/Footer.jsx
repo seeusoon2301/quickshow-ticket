@@ -1,6 +1,22 @@
 import { Facebook, Instagram, Youtube, Mail } from "lucide-react";
+import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+
+const API_BASE = "http://localhost:5000/api";
 
 const Footer = () => {
+  const [categories, setCategories] = useState([]);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/categories`)
+      .then((res) => res.json())
+      .then((response) => {
+        const cats = response.data?.categories || [];
+        setCategories(cats.slice(0, 4)); // Only show first 4
+      })
+      .catch((err) => console.error("Failed to fetch categories:", err));
+  }, []);
+
   return (
     <footer className="bg-black text-gray-300 px-6 md:px-16 lg:px-24 xl:px-44 pt-16 pb-10">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-10">
@@ -25,14 +41,20 @@ const Footer = () => {
           </div>
         </div>
 
-        {/* Links */}
+        {/* Dynamic Category Links */}
         <div>
           <h3 className="text-lg font-semibold text-white mb-4">Khám phá</h3>
           <ul className="space-y-2 text-sm">
-            <li className="hover:text-primary cursor-pointer">Sự kiện Hot</li>
-            <li className="hover:text-primary cursor-pointer">Âm nhạc</li>
-            <li className="hover:text-primary cursor-pointer">Thể thao</li>
-            <li className="hover:text-primary cursor-pointer">Nghệ thuật & Văn hoá</li>
+            <li>
+              <Link to="/" className="hover:text-primary transition">Tất cả sự kiện</Link>
+            </li>
+            {categories.map((cat) => (
+              <li key={cat._id}>
+                <Link to={`/category/${cat.slug}`} className="hover:text-primary transition">
+                  {cat.name}
+                </Link>
+              </li>
+            ))}
           </ul>
         </div>
 
