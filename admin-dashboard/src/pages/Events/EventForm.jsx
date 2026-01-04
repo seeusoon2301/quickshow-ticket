@@ -8,6 +8,7 @@ import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
 import { ArrowLeft, Save, Loader2, Plus, X, Upload, Link as LinkIcon, Image } from 'lucide-react';
 import { Card, Button, Input, Select, Textarea } from '../../components/ui';
+
 import * as eventService from '../../services/eventService';
 import { API_URL } from '../../services/api';
 
@@ -15,6 +16,8 @@ import { API_URL } from '../../services/api';
 const BASE_URL = API_URL.replace('/api', '');
 
 export default function EventForm() {
+  // Ticket classes for this event
+  const [ticketClasses, setTicketClasses] = useState([]);
   const { id } = useParams();
   const navigate = useNavigate();
   const { authFetch, token } = useAuth();
@@ -31,8 +34,8 @@ export default function EventForm() {
 
   const [form, setForm] = useState({
     title: '', description: '', category: '',
-    startDate: '', startTime: '', endDate: '', endTime: '',
     venue: '', status: 'DRAFT', thumbnail: '', artists: [],
+    performances: []
   });
 
   // Fetch venues, artists, and categories
@@ -63,7 +66,7 @@ export default function EventForm() {
     fetchData();
   }, [isEdit]);
 
-  // Fetch event if editing
+  // Fetch event and ticket classes if editing
   useEffect(() => {
     if (!isEdit || !id) return;
     const fetchEvent = async () => {
@@ -76,13 +79,20 @@ export default function EventForm() {
           const start = new Date(c.start_time);
           const end = c.end_time ? new Date(c.end_time) : null;
           setForm({
-            title: c.title, description: c.description || '', 
+            title: c.title,
+            description: c.description || '',
             category: c.category?._id || c.category || '',
-            startDate: start.toISOString().split('T')[0], startTime: start.toTimeString().slice(0, 5),
-            endDate: end ? end.toISOString().split('T')[0] : '', endTime: end ? end.toTimeString().slice(0, 5) : '',
-            venue: c.venue?._id || '', status: c.status, thumbnail: c.thumbnail || '',
+            venue: c.venue?._id || '',
+            status: c.status,
+            thumbnail: c.thumbnail || '',
             artists: c.artists?.map(a => a._id) || [],
+            performances: (c.performances || []).map(perf => ({
+              ...perf,
+              date: perf.date ? new Date(perf.date).toISOString().split('T')[0] : ''
+            })),
           });
+          // Use ticketClasses from the event fetch response
+          if (data.data.ticketClasses) setTicketClasses(data.data.ticketClasses);
         }
       } catch (error) {
         toast.error('Failed to load event');
@@ -97,13 +107,21 @@ export default function EventForm() {
     e.preventDefault();
     setSaving(true);
     try {
+      // Convert date strings to Date objects for performances
+      const performances = form.performances.map(perf => ({
+        ...perf,
+        date: perf.date ? new Date(perf.date + 'T00:00:00Z') : null
+      }));
       const payload = {
-        title: form.title, description: form.description, category: form.category,
-        start_time: new Date(`${form.startDate}T${form.startTime}`).toISOString(),
-        end_time: form.endDate ? new Date(`${form.endDate}T${form.endTime}`).toISOString() : null,
-        venue: form.venue || null, status: form.status, thumbnail: form.thumbnail, artists: form.artists,
+        title: form.title,
+        description: form.description,
+        category: form.category,
+        venue: form.venue || null,
+        status: form.status,
+        thumbnail: form.thumbnail,
+        artists: form.artists,
+        performances,
       };
-      
       if (isEdit) {
         await eventService.updateConcert(authFetch, id, payload);
         toast.success('Event updated');
@@ -211,12 +229,58 @@ export default function EventForm() {
             </div>
           </Card>
 
-          <Card title="Date & Time">
-            <div className="grid grid-cols-2 gap-4">
-              <Input label="Start Date *" type="date" required value={form.startDate} onChange={e => setForm({ ...form, startDate: e.target.value })} />
-              <Input label="Start Time *" type="time" required value={form.startTime} onChange={e => setForm({ ...form, startTime: e.target.value })} />
-              <Input label="End Date" type="date" value={form.endDate} onChange={e => setForm({ ...form, endDate: e.target.value })} />
-              <Input label="End Time" type="time" value={form.endTime} onChange={e => setForm({ ...form, endTime: e.target.value })} />
+          <Card title="Performances">
+            <div className="space-y-4">
+              {form.performances.map((perf, idx) => (
+                <div key={idx} className="grid grid-cols-4 gap-2 items-end border-b border-white/10 pb-2 mb-2">
+                  <Input label="Date" type="date" value={perf.date} onChange={e => {
+                    const val = e.target.value;
+                    setForm(f => {
+                      const arr = [...f.performances];
+                      arr[idx].date = val;
+                      return { ...f, performances: arr };
+                    });
+                  }} />
+                  <Input label="Start" type="time" value={perf.startTime} onChange={e => {
+                    const val = e.target.value;
+                    setForm(f => {
+                      const arr = [...f.performances];
+                      arr[idx].startTime = val;
+                      return { ...f, performances: arr };
+                    });
+                  }} />
+                  <Input label="End" type="time" value={perf.endTime} onChange={e => {
+                    const val = e.target.value;
+                    setForm(f => {
+                      const arr = [...f.performances];
+                      arr[idx].endTime = val;
+                      return { ...f, performances: arr };
+                    });
+                  }} />
+                  {/* Ticket classes always included, select box hidden */}
+                  <input type="hidden" value={perf.ticket_classes?.join(',') || ''} readOnly />
+                  <Button type="button" variant="danger" onClick={() => {
+                    setForm(f => ({ ...f, performances: f.performances.filter((_, i) => i !== idx) }));
+                  }}>Remove</Button>
+                </div>
+              ))}
+              <Button type="button" variant="outline" onClick={() => {
+                setForm(f => ({
+                  ...f,
+                  performances: [
+                    ...f.performances,
+                    {
+                      date: '',
+                      startTime: '',
+                      endTime: '',
+                      ticket_classes: ticketClasses.map(tc => tc._id) // always include all
+                    }
+                  ]
+                }));
+              }}>
+                <Plus size={16} /> Add Performance
+              </Button>
+              <div className="text-xs text-gray-500 mt-2">All changes are saved when you submit the event form below.</div>
             </div>
           </Card>
 

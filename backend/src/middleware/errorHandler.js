@@ -45,8 +45,16 @@ export const errorHandler = (err, req, res, next) => {
   // Mongoose duplicate key error
   if (err.code === 11000) {
     statusCode = 400;
-    const field = Object.keys(err.keyValue)[0];
-    message = `${field} already exists`;
+    const fields = Object.keys(err.keyValue);
+    // Better error messages for compound unique indexes
+    if (fields.includes('concert') && fields.includes('name')) {
+      message = 'A ticket class with this name already exists for this concert';
+    } else if (fields.length > 1) {
+      message = `Duplicate entry: ${fields.join(' + ')} combination already exists`;
+    } else {
+      const field = fields[0];
+      message = `${field} already exists`;
+    }
   }
 
   // Mongoose validation error

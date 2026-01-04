@@ -2,7 +2,9 @@ import mongoose from 'mongoose';
 
 /**
  * ShowSeat Model - Maps seats to concerts with availability status
- * Each concert has its own seat availability
+ * 
+ * Each concert has its own seat availability and can have custom display labels.
+ * The display label comes from EventZone's rowLabelMapping for this event.
  */
 const showSeatSchema = new mongoose.Schema({
   concert: {
@@ -14,6 +16,11 @@ const showSeatSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Seat',
     required: true
+  },
+  // Reference to EventZone for this seat's zone in this event
+  eventZone: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'EventZone'
   },
   ticketClass: {
     type: mongoose.Schema.Types.ObjectId,
@@ -34,6 +41,17 @@ const showSeatSchema = new mongoose.Schema({
   price: {
     type: Number,
     min: 0
+  },
+  // Custom display label for this event (e.g., "AT1" instead of "A1")
+  // Computed from EventZone.rowLabelMapping when ShowSeats are created
+  displayLabel: {
+    type: String,
+    trim: true
+  },
+  // Custom row label for this event (e.g., "AT" instead of "A")
+  displayRowLabel: {
+    type: String,
+    trim: true
   }
 }, { timestamps: true });
 

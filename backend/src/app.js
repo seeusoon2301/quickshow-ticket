@@ -22,6 +22,7 @@ import voucherRoutes from './routes/voucher.routes.js';
 import artistRoutes from './routes/artist.routes.js';
 import uploadRoutes from './routes/upload.routes.js';
 import categoryRoutes from './routes/category.routes.js';
+import eventZoneRoutes from './routes/eventZone.routes.js';
 
 // Import error handler
 import { errorHandler } from './middleware/errorHandler.js';
@@ -114,6 +115,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/concerts', concertRoutes);
+app.use('/api/concerts', eventZoneRoutes); // Event zone routes nested under concerts
 app.use('/api/venues', venueRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/tickets', ticketRoutes);

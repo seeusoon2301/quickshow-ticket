@@ -9,9 +9,12 @@
  * Features:
  * - Add/remove seats visually
  * - Drag seats to position them
- * - Multi-select and move multiple seats
+ * - Multi-select with box selection and move multiple seats
+ * - Copy/paste seats
  * - Generate rows of seats (straight or curved)
  * - Set physical seat types (Normal, Wheelchair, Restricted)
+ * - Row labels displayed on canvas
+ * - Gap/split tool for creating aisle spaces
  * - Capacity validation against venue total
  * - Save seat layout to database
  */
@@ -24,7 +27,9 @@ import toast from 'react-hot-toast';
 import {
   ArrowLeft, Save, Plus, Trash2, Grid3X3, 
   MousePointer, Move, ZoomIn, ZoomOut, RotateCcw,
-  AlertTriangle, Rows3, Undo2, Download, Settings2
+  AlertTriangle, Rows3, Undo2, Download, Settings2,
+  Copy, Clipboard, Scissors, SplitSquareHorizontal,
+  Tag
 } from 'lucide-react';
 import { PageLoader, Button, Card, Modal, Input } from '../../components/ui';
 import * as venueService from '../../services/venueService';
@@ -32,6 +37,7 @@ import * as venueService from '../../services/venueService';
 // Constants
 const SEAT_SIZE = 28;
 const SEAT_SPACING = 35;
+const ROW_LABEL_WIDTH = 40;
 
 const SEAT_TYPES = [
   { value: 'NORMAL', label: 'Normal', color: '#3B82F6' },
@@ -40,10 +46,11 @@ const SEAT_TYPES = [
 ];
 
 const TOOLS = [
-  { id: 'select', label: 'Select', icon: MousePointer },
-  { id: 'move', label: 'Pan', icon: Move },
-  { id: 'addSeat', label: 'Add Seat', icon: Plus },
-  { id: 'delete', label: 'Delete', icon: Trash2 },
+  { id: 'select', label: 'Select', icon: MousePointer, hint: 'Click or drag to select' },
+  { id: 'move', label: 'Pan', icon: Move, hint: 'Drag to pan canvas' },
+  { id: 'addSeat', label: 'Add Seat', icon: Plus, hint: 'Click to add seats' },
+  { id: 'delete', label: 'Delete', icon: Trash2, hint: 'Click seats to delete' },
+  { id: 'split', label: 'Split/Gap', icon: SplitSquareHorizontal, hint: 'Add gap in row' },
 ];
 
 export default function VisualSeatDesigner() {
@@ -97,6 +104,38 @@ export default function VisualSeatDesigner() {
 
   // History for undo
   const [history, setHistory] = useState([]);
+
+  // Box selection state
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [selectionRect, setSelectionRect] = useState(null);
+  const selectionStartRef = useRef(null);
+
+  // Clipboard for copy/paste
+  const [clipboard, setClipboard] = useState([]);
+
+  // Multi-drag state
+  const [isDraggingMultiple, setIsDraggingMultiple] = useState(false);
+  const dragStartPosRef = useRef(null);
+  const originalPositionsRef = useRef({});
+
+  // Split/Gap modal
+  const [showSplitModal, setShowSplitModal] = useState(false);
+  const [splitConfig, setSplitConfig] = useState({
+    targetRow: 'A',
+    afterSeatNumber: 5,
+    gapSize: SEAT_SPACING * 2
+  });
+
+  // Relabel modal for selected seats
+  const [showRelabelModal, setShowRelabelModal] = useState(false);
+  const [relabelConfig, setRelabelConfig] = useState({
+    newRowLabel: 'A',
+    startNumber: 1,
+    renumberSeats: true
+  });
+
+  // Row label visibility
+  const [showRowLabels, setShowRowLabels] = useState(true);
 
   // Fetch data
   const fetchData = useCallback(async () => {
@@ -155,6 +194,223 @@ export default function VisualSeatDesigner() {
     window.addEventListener('resize', updateSize);
     return () => window.removeEventListener('resize', updateSize);
   }, []);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Skip if user is typing in an input
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+      const key = e.key.toLowerCase();
+      const isCtrl = e.ctrlKey || e.metaKey;
+
+      // Copy (Ctrl+C)
+      if (isCtrl && key === 'c') {
+        e.preventDefault();
+        handleCopy();
+      }
+      // Paste (Ctrl+V)
+      else if (isCtrl && key === 'v') {
+        e.preventDefault();
+        handlePaste();
+      }
+      // Cut (Ctrl+X)
+      else if (isCtrl && key === 'x') {
+        e.preventDefault();
+        handleCut();
+      }
+      // Select All (Ctrl+A)
+      else if (isCtrl && key === 'a') {
+        e.preventDefault();
+        setSelectedSeats(seats.map(s => s.id));
+      }
+      // Undo (Ctrl+Z)
+      else if (isCtrl && key === 'z') {
+        e.preventDefault();
+        handleUndo();
+      }
+      // Delete (Delete or Backspace)
+      else if ((key === 'delete' || key === 'backspace') && selectedSeats.length > 0) {
+        e.preventDefault();
+        deleteSelectedSeats();
+      }
+      // Escape to deselect
+      else if (key === 'escape') {
+        setSelectedSeats([]);
+        setIsSelecting(false);
+        setSelectionRect(null);
+      }
+      // Arrow keys to move selected seats
+      else if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key) && selectedSeats.length > 0) {
+        e.preventDefault();
+        const moveAmount = e.shiftKey ? 10 : 5;
+        let dx = 0, dy = 0;
+        if (key === 'arrowup') dy = -moveAmount;
+        if (key === 'arrowdown') dy = moveAmount;
+        if (key === 'arrowleft') dx = -moveAmount;
+        if (key === 'arrowright') dx = moveAmount;
+        moveSelectedSeats(dx, dy);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedSeats, seats, clipboard]);
+
+  // Move selected seats by delta
+  const moveSelectedSeats = (dx, dy) => {
+    const newSeats = seats.map(s => 
+      selectedSeats.includes(s.id) ? { ...s, x: s.x + dx, y: s.y + dy } : s
+    );
+    setSeats(newSeats);
+    pushHistory(newSeats);
+    setHasChanges(true);
+  };
+
+  // Copy selected seats to clipboard
+  const handleCopy = () => {
+    if (selectedSeats.length === 0) {
+      toast.error('No seats selected');
+      return;
+    }
+    const seatsToCopy = seats.filter(s => selectedSeats.includes(s.id));
+    // Calculate centroid for relative positioning
+    const avgX = seatsToCopy.reduce((sum, s) => sum + s.x, 0) / seatsToCopy.length;
+    const avgY = seatsToCopy.reduce((sum, s) => sum + s.y, 0) / seatsToCopy.length;
+    
+    const clipboardData = seatsToCopy.map(s => ({
+      ...s,
+      relX: s.x - avgX,
+      relY: s.y - avgY
+    }));
+    setClipboard(clipboardData);
+    toast.success(`Copied ${seatsToCopy.length} seats`);
+  };
+
+  // Cut selected seats
+  const handleCut = () => {
+    if (selectedSeats.length === 0) {
+      toast.error('No seats selected');
+      return;
+    }
+    handleCopy();
+    deleteSelectedSeats();
+  };
+
+  // Paste from clipboard
+  const handlePaste = (pasteX = null, pasteY = null) => {
+    if (clipboard.length === 0) {
+      toast.error('Clipboard is empty');
+      return;
+    }
+    
+    if (seats.length + clipboard.length > venue.total_capacity) {
+      toast.error(`Cannot paste ${clipboard.length} seats. Only ${venue.total_capacity - seats.length} remaining.`);
+      return;
+    }
+
+    // Default paste position is offset from original
+    const offsetX = pasteX !== null ? pasteX : 50;
+    const offsetY = pasteY !== null ? pasteY : 50;
+
+    const newSeats = clipboard.map((s, idx) => ({
+      id: `temp-${Date.now()}-${idx}`,
+      row: s.row,
+      number: s.number,
+      label: s.label,
+      seatType: s.seatType,
+      isActive: s.isActive,
+      x: Math.round((s.relX + offsetX + 200) / 5) * 5,
+      y: Math.round((s.relY + offsetY + 200) / 5) * 5,
+      rotation: s.rotation || 0,
+      isNew: true
+    }));
+
+    const allSeats = [...seats, ...newSeats];
+    setSeats(allSeats);
+    pushHistory(allSeats);
+    setHasChanges(true);
+    setSelectedSeats(newSeats.map(s => s.id));
+    toast.success(`Pasted ${newSeats.length} seats`);
+  };
+
+  // Get unique rows for labels
+  const getRowLabels = useCallback(() => {
+    const rowMap = new Map();
+    seats.forEach(seat => {
+      if (!rowMap.has(seat.row)) {
+        rowMap.set(seat.row, { row: seat.row, minY: seat.y, seats: [] });
+      }
+      const rowData = rowMap.get(seat.row);
+      rowData.minY = Math.min(rowData.minY, seat.y);
+      rowData.seats.push(seat);
+    });
+    return Array.from(rowMap.values()).sort((a, b) => a.minY - b.minY);
+  }, [seats]);
+
+  // Add gap/split in row
+  const addGapInRow = () => {
+    const { targetRow, afterSeatNumber, gapSize } = splitConfig;
+    const rowSeats = seats.filter(s => s.row === targetRow);
+    
+    if (rowSeats.length === 0) {
+      toast.error(`Row ${targetRow} not found`);
+      return;
+    }
+
+    const newSeats = seats.map(s => {
+      if (s.row === targetRow && s.number > afterSeatNumber) {
+        return { ...s, x: s.x + gapSize };
+      }
+      return s;
+    });
+
+    setSeats(newSeats);
+    pushHistory(newSeats);
+    setHasChanges(true);
+    setShowSplitModal(false);
+    toast.success(`Added gap in row ${targetRow} after seat ${afterSeatNumber}`);
+  };
+
+  // Relabel selected seats (change row label and optionally renumber)
+  const relabelSelectedSeats = () => {
+    if (selectedSeats.length === 0) {
+      toast.error('No seats selected');
+      return;
+    }
+
+    const { newRowLabel, startNumber, renumberSeats } = relabelConfig;
+    
+    // Sort selected seats by position (left to right)
+    const selectedSeatObjs = seats
+      .filter(s => selectedSeats.includes(s.id))
+      .sort((a, b) => a.x - b.x);
+
+    const newSeats = seats.map(s => {
+      if (selectedSeats.includes(s.id)) {
+        const idx = selectedSeatObjs.findIndex(sel => sel.id === s.id);
+        const newNumber = renumberSeats ? startNumber + idx : s.number;
+        return {
+          ...s,
+          row: newRowLabel,
+          number: newNumber,
+          label: `${newRowLabel}${newNumber}`
+        };
+      }
+      return s;
+    });
+
+    setSeats(newSeats);
+    pushHistory(newSeats);
+    setHasChanges(true);
+    setShowRelabelModal(false);
+    toast.success(`Relabeled ${selectedSeats.length} seats to row ${newRowLabel}`);
+  };
+
+  // Get all unique row labels for dropdown
+  const getUniqueRows = useCallback(() => {
+    return [...new Set(seats.map(s => s.row))].sort();
+  }, [seats]);
 
   // Save changes to history
   const pushHistory = (newSeats) => {
@@ -325,6 +581,12 @@ export default function VisualSeatDesigner() {
 
   // Handle stage click
   const handleStageClick = (e) => {
+    // Don't handle click if we just finished a box selection
+    if (selectionStartRef.current?.wasBoxSelect) {
+      selectionStartRef.current = null;
+      return;
+    }
+
     if (tool === 'addSeat') {
       const stage = e.target.getStage();
       const pos = stage.getPointerPosition();
@@ -335,7 +597,113 @@ export default function VisualSeatDesigner() {
       if (e.target === e.target.getStage()) {
         setSelectedSeats([]);
       }
+    } else if (tool === 'split') {
+      // Open split modal with nearest row
+      setShowSplitModal(true);
     }
+  };
+
+  // Handle mouse down for box selection
+  const handleStageMouseDown = (e) => {
+    if (tool !== 'select') return;
+    if (e.target !== e.target.getStage()) return;
+
+    const stage = e.target.getStage();
+    const pos = stage.getPointerPosition();
+    const x = (pos.x - stagePos.x) / scale;
+    const y = (pos.y - stagePos.y) / scale;
+
+    selectionStartRef.current = { x, y, wasBoxSelect: false };
+  };
+
+  // Handle mouse move for box selection
+  const handleStageMouseMove = (e) => {
+    if (!selectionStartRef.current) return;
+    if (tool !== 'select') return;
+
+    const stage = e.target.getStage();
+    const pos = stage.getPointerPosition();
+    const x = (pos.x - stagePos.x) / scale;
+    const y = (pos.y - stagePos.y) / scale;
+
+    const start = selectionStartRef.current;
+    const dx = Math.abs(x - start.x);
+    const dy = Math.abs(y - start.y);
+
+    // Only start box selection after dragging at least 10px (prevents accidental triggers)
+    if (dx > 10 || dy > 10 || isSelecting) {
+      if (!isSelecting) {
+        setIsSelecting(true);
+        selectionStartRef.current.wasBoxSelect = true;
+      }
+      
+      setSelectionRect({
+        x: Math.min(start.x, x),
+        y: Math.min(start.y, y),
+        width: Math.abs(x - start.x),
+        height: Math.abs(y - start.y)
+      });
+    }
+  };
+
+  // Handle mouse up for box selection
+  const handleStageMouseUp = (e) => {
+    // Always clear selection state on mouse up
+    const wasSelecting = isSelecting;
+    const currentRect = selectionRect;
+    
+    // Immediately reset all selection state
+    setIsSelecting(false);
+    setSelectionRect(null);
+    
+    if (!wasSelecting || !currentRect) {
+      selectionStartRef.current = null;
+      return;
+    }
+
+    // Minimum size threshold for valid selection
+    const MIN_SELECTION_SIZE = 15;
+    if (currentRect.width < MIN_SELECTION_SIZE && currentRect.height < MIN_SELECTION_SIZE) {
+      selectionStartRef.current = null;
+      return;
+    }
+
+    // Find seats within selection rectangle (check if seat bounds overlap with selection)
+    const halfSeat = SEAT_SIZE / 2;
+    const selected = seats.filter(seat => {
+      // Seat bounding box
+      const seatLeft = seat.x - halfSeat;
+      const seatRight = seat.x + halfSeat;
+      const seatTop = seat.y - halfSeat;
+      const seatBottom = seat.y + halfSeat;
+      
+      // Selection bounding box
+      const selLeft = currentRect.x;
+      const selRight = currentRect.x + currentRect.width;
+      const selTop = currentRect.y;
+      const selBottom = currentRect.y + currentRect.height;
+      
+      // Check for overlap (any part of seat inside selection)
+      return seatRight >= selLeft && 
+             seatLeft <= selRight && 
+             seatBottom >= selTop && 
+             seatTop <= selBottom;
+    });
+
+    if (selected.length > 0) {
+      if (e.evt?.shiftKey) {
+        // Add to existing selection
+        setSelectedSeats(prev => [...new Set([...prev, ...selected.map(s => s.id)])]);
+      } else {
+        setSelectedSeats(selected.map(s => s.id));
+      }
+      toast.success(`Selected ${selected.length} seat${selected.length > 1 ? 's' : ''}`);
+    }
+    
+    // Clear the ref after a short delay to allow click handler to check it
+    setTimeout(() => {
+      selectionStartRef.current = null;
+    }, 50);
   };
 
   // Handle seat click
@@ -360,19 +728,61 @@ export default function VisualSeatDesigner() {
     }
   };
 
-  // Handle seat drag
+  // Handle seat drag - supports multi-select dragging
+  const handleSeatDragStart = (seat, e) => {
+    // If dragging a selected seat, move all selected seats together
+    if (selectedSeats.includes(seat.id) && selectedSeats.length > 1) {
+      setIsDraggingMultiple(true);
+      dragStartPosRef.current = { x: e.target.x(), y: e.target.y() };
+      
+      // Store original positions of all selected seats
+      const positions = {};
+      seats.forEach(s => {
+        if (selectedSeats.includes(s.id)) {
+          positions[s.id] = { x: s.x, y: s.y };
+        }
+      });
+      originalPositionsRef.current = positions;
+    }
+  };
+
   const handleSeatDrag = (seat, e) => {
     const newX = Math.round(e.target.x() / 5) * 5;
     const newY = Math.round(e.target.y() / 5) * 5;
     
-    const newSeats = seats.map(s => 
-      s.id === seat.id ? { ...s, x: newX, y: newY } : s
-    );
-    setSeats(newSeats);
+    if (isDraggingMultiple && selectedSeats.includes(seat.id)) {
+      // Calculate delta from drag start
+      const dx = newX - dragStartPosRef.current.x;
+      const dy = newY - dragStartPosRef.current.y;
+      
+      // Move all selected seats by the same delta
+      const newSeats = seats.map(s => {
+        if (selectedSeats.includes(s.id)) {
+          const orig = originalPositionsRef.current[s.id];
+          return { 
+            ...s, 
+            x: Math.round((orig.x + dx) / 5) * 5, 
+            y: Math.round((orig.y + dy) / 5) * 5 
+          };
+        }
+        return s;
+      });
+      setSeats(newSeats);
+    } else {
+      const newSeats = seats.map(s => 
+        s.id === seat.id ? { ...s, x: newX, y: newY } : s
+      );
+      setSeats(newSeats);
+    }
     setHasChanges(true);
   };
 
   const handleSeatDragEnd = () => {
+    if (isDraggingMultiple) {
+      setIsDraggingMultiple(false);
+      dragStartPosRef.current = null;
+      originalPositionsRef.current = {};
+    }
     pushHistory(seats);
   };
 
@@ -446,6 +856,7 @@ export default function VisualSeatDesigner() {
         y={seat.y}
         rotation={seat.rotation || 0}
         draggable={tool === 'select'}
+        onDragStart={(e) => handleSeatDragStart(seat, e)}
         onDragMove={(e) => handleSeatDrag(seat, e)}
         onDragEnd={handleSeatDragEnd}
         onClick={(e) => handleSeatClick(seat, e)}
@@ -530,6 +941,7 @@ export default function VisualSeatDesigner() {
                 <button
                   key={t.id}
                   onClick={() => setTool(t.id)}
+                  title={t.hint}
                   className={`p-2 rounded-lg flex flex-col items-center gap-1 transition-colors ${
                     tool === t.id
                       ? 'bg-primary text-black'
@@ -549,7 +961,47 @@ export default function VisualSeatDesigner() {
               <Button size="sm" variant="outline" className="w-full" onClick={() => setShowGridModal(true)}>
                 <Grid3X3 size={14} /> Generate Grid
               </Button>
+              <Button size="sm" variant="outline" className="w-full" onClick={() => setShowSplitModal(true)}>
+                <SplitSquareHorizontal size={14} /> Add Gap/Split
+              </Button>
             </div>
+          </Card>
+
+          {/* Edit Actions (Copy/Paste/Align) */}
+          <Card title="Edit Actions" className="flex-shrink-0">
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                onClick={handleCopy}
+                disabled={selectedSeats.length === 0}
+                title="Copy (Ctrl+C)"
+                className="p-2 rounded-lg flex flex-col items-center gap-1 bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Copy size={16} />
+                <span className="text-[10px]">Copy</span>
+              </button>
+              <button
+                onClick={handleCut}
+                disabled={selectedSeats.length === 0}
+                title="Cut (Ctrl+X)"
+                className="p-2 rounded-lg flex flex-col items-center gap-1 bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Scissors size={16} />
+                <span className="text-[10px]">Cut</span>
+              </button>
+              <button
+                onClick={() => handlePaste()}
+                disabled={clipboard.length === 0}
+                title="Paste (Ctrl+V)"
+                className="p-2 rounded-lg flex flex-col items-center gap-1 bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Clipboard size={16} />
+                <span className="text-[10px]">Paste</span>
+              </button>
+            </div>
+            
+            {clipboard.length > 0 && (
+              <p className="text-[10px] text-gray-500 mt-2">📋 {clipboard.length} seats in clipboard</p>
+            )}
           </Card>
 
           {/* Seat Type */}
@@ -586,6 +1038,16 @@ export default function VisualSeatDesigner() {
                     </button>
                   ))}
                 </div>
+                <Button size="sm" variant="outline" className="w-full mt-2" onClick={() => {
+                  // Pre-fill with first selected seat's row
+                  const firstSeat = seats.find(s => selectedSeats.includes(s.id));
+                  if (firstSeat) {
+                    setRelabelConfig(prev => ({ ...prev, newRowLabel: firstSeat.row }));
+                  }
+                  setShowRelabelModal(true);
+                }}>
+                  <Tag size={12} /> Relabel Row
+                </Button>
                 <Button size="sm" variant="danger" className="w-full mt-2" onClick={deleteSelectedSeats}>
                   <Trash2 size={12} /> Delete Selected
                 </Button>
@@ -607,15 +1069,28 @@ export default function VisualSeatDesigner() {
                 <RotateCcw size={16} />
               </button>
             </div>
+            <label className="flex items-center gap-2 mt-3 pt-2 border-t border-white/10 cursor-pointer">
+              <input 
+                type="checkbox" 
+                checked={showRowLabels} 
+                onChange={(e) => setShowRowLabels(e.target.checked)} 
+                className="w-4 h-4 rounded"
+              />
+              <span className="text-xs text-gray-400">Show Row Labels</span>
+            </label>
           </Card>
 
           {/* Instructions */}
           <Card className="flex-shrink-0">
             <div className="text-xs text-gray-500 space-y-1">
-              <p>• Click canvas to add seats</p>
-              <p>• Drag seats to reposition</p>
-              <p>• Shift+Click for multi-select</p>
-              <p>• Use Add Row for quick rows</p>
+              <p className="font-medium text-gray-400 mb-2">Shortcuts:</p>
+              <p>• <kbd className="px-1 bg-white/10 rounded">Drag</kbd> Box select</p>
+              <p>• <kbd className="px-1 bg-white/10 rounded">Shift+Click</kbd> Multi-select</p>
+              <p>• <kbd className="px-1 bg-white/10 rounded">Ctrl+C/V/X</kbd> Copy/Paste/Cut</p>
+              <p>• <kbd className="px-1 bg-white/10 rounded">Arrows</kbd> Move selected</p>
+              <p>• <kbd className="px-1 bg-white/10 rounded">Delete</kbd> Remove selected</p>
+              <p>• <kbd className="px-1 bg-white/10 rounded">Ctrl+A</kbd> Select all</p>
+              <p>• <kbd className="px-1 bg-white/10 rounded">Esc</kbd> Deselect</p>
             </div>
           </Card>
         </div>
@@ -634,7 +1109,11 @@ export default function VisualSeatDesigner() {
             onDragEnd={handleStageDrag}
             onClick={handleStageClick}
             onTap={handleStageClick}
-            style={{ cursor: tool === 'move' ? 'grab' : tool === 'addSeat' ? 'crosshair' : 'default' }}
+            onMouseDown={handleStageMouseDown}
+            onMouseMove={handleStageMouseMove}
+            onMouseUp={handleStageMouseUp}
+            onMouseLeave={handleStageMouseUp}
+            style={{ cursor: tool === 'move' ? 'grab' : tool === 'addSeat' ? 'crosshair' : tool === 'split' ? 'col-resize' : isSelecting ? 'crosshair' : 'default' }}
           >
             <Layer>
               {/* Grid */}
@@ -649,10 +1128,71 @@ export default function VisualSeatDesigner() {
               <Rect x={200} y={20} width={400} height={40} fill="#1f1f1f" cornerRadius={8} />
               <Text x={200} y={20} width={400} height={40} text="STAGE" fontSize={16} fill="#666" align="center" verticalAlign="middle" />
 
+              {/* Row Labels */}
+              {showRowLabels && getRowLabels().map(rowData => {
+                // Find the leftmost seat in this row
+                const leftmostSeat = rowData.seats.reduce((min, s) => s.x < min.x ? s : min, rowData.seats[0]);
+                return (
+                  <Group key={`label-${rowData.row}`}>
+                    <Rect
+                      x={leftmostSeat.x - ROW_LABEL_WIDTH - 15}
+                      y={rowData.minY - SEAT_SIZE / 2}
+                      width={ROW_LABEL_WIDTH}
+                      height={SEAT_SIZE}
+                      fill="#374151"
+                      cornerRadius={4}
+                    />
+                    <Text
+                      x={leftmostSeat.x - ROW_LABEL_WIDTH - 15}
+                      y={rowData.minY - SEAT_SIZE / 2}
+                      width={ROW_LABEL_WIDTH}
+                      height={SEAT_SIZE}
+                      text={rowData.row}
+                      fontSize={14}
+                      fontStyle="bold"
+                      fill="#F3F4F6"
+                      align="center"
+                      verticalAlign="middle"
+                    />
+                  </Group>
+                );
+              })}
+
               {/* Seats */}
               {seats.map(seat => renderSeat(seat))}
+
+              {/* Selection Rectangle - Draw on top of seats */}
+              {selectionRect && selectionRect.width > 5 && selectionRect.height > 5 && (
+                <Rect
+                  x={selectionRect.x}
+                  y={selectionRect.y}
+                  width={selectionRect.width}
+                  height={selectionRect.height}
+                  fill="rgba(59, 130, 246, 0.15)"
+                  stroke="#3B82F6"
+                  strokeWidth={2}
+                  dash={[8, 4]}
+                  shadowColor="#3B82F6"
+                  shadowBlur={8}
+                  shadowOpacity={0.5}
+                />
+              )}
             </Layer>
           </Stage>
+          
+          {/* Selection hint overlay */}
+          {isSelecting && selectionRect && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-blue-600/90 text-white text-sm px-3 py-1.5 rounded-lg pointer-events-none">
+              Drag to select seats
+            </div>
+          )}
+          
+          {/* Selection info overlay */}
+          {selectedSeats.length > 0 && (
+            <div className="absolute bottom-4 left-4 bg-black/80 text-white text-sm px-3 py-2 rounded-lg">
+              {selectedSeats.length} seat{selectedSeats.length !== 1 ? 's' : ''} selected
+            </div>
+          )}
         </div>
       </div>
 
@@ -736,6 +1276,109 @@ export default function VisualSeatDesigner() {
           <div className="flex gap-3">
             <Button variant="outline" onClick={() => setShowGridModal(false)} className="flex-1">Cancel</Button>
             <Button onClick={generateGrid} className="flex-1" disabled={gridConfig.rows * gridConfig.seatsPerRow > venue.total_capacity}>Generate Grid</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Split/Gap Modal */}
+      <Modal isOpen={showSplitModal} onClose={() => setShowSplitModal(false)} title="Add Gap/Split in Row" size="md">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-400">
+            Create a gap (aisle) in a row by moving seats after a specific position to the right.
+          </p>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Target Row</label>
+              <select
+                value={splitConfig.targetRow}
+                onChange={(e) => setSplitConfig({ ...splitConfig, targetRow: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                {[...new Set(seats.map(s => s.row))].sort().map(row => (
+                  <option key={row} value={row}>{row}</option>
+                ))}
+              </select>
+            </div>
+            <Input 
+              label="After Seat #" 
+              type="number" 
+              min={1} 
+              value={splitConfig.afterSeatNumber} 
+              onChange={(e) => setSplitConfig({ ...splitConfig, afterSeatNumber: parseInt(e.target.value) || 1 })} 
+            />
+          </div>
+          
+          <Input 
+            label="Gap Size (px)" 
+            type="number" 
+            min={SEAT_SPACING} 
+            step={5}
+            value={splitConfig.gapSize} 
+            onChange={(e) => setSplitConfig({ ...splitConfig, gapSize: parseInt(e.target.value) || SEAT_SPACING })} 
+          />
+
+          <div className="bg-white/5 rounded-lg p-3">
+            <p className="text-sm text-gray-400">
+              This will shift all seats in row <span className="text-white font-medium">{splitConfig.targetRow}</span> after seat #{splitConfig.afterSeatNumber} by <span className="text-white font-medium">{splitConfig.gapSize}px</span> to the right.
+            </p>
+          </div>
+
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={() => setShowSplitModal(false)} className="flex-1">Cancel</Button>
+            <Button onClick={addGapInRow} className="flex-1">Add Gap</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Relabel Modal */}
+      <Modal isOpen={showRelabelModal} onClose={() => setShowRelabelModal(false)} title="Relabel Selected Seats" size="md">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-400">
+            Change the row label for {selectedSeats.length} selected seat{selectedSeats.length !== 1 ? 's' : ''}.
+            The new label will be available in the Gap/Split tool.
+          </p>
+          
+          <Input 
+            label="New Row Label" 
+            value={relabelConfig.newRowLabel} 
+            onChange={(e) => setRelabelConfig({ ...relabelConfig, newRowLabel: e.target.value.toUpperCase() })} 
+            maxLength={2}
+            placeholder="e.g. A, B, AA"
+          />
+
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input 
+              type="checkbox" 
+              checked={relabelConfig.renumberSeats} 
+              onChange={(e) => setRelabelConfig({ ...relabelConfig, renumberSeats: e.target.checked })} 
+              className="w-4 h-4 rounded"
+            />
+            <span className="text-sm text-white">Renumber seats sequentially</span>
+          </label>
+
+          {relabelConfig.renumberSeats && (
+            <Input 
+              label="Start Number" 
+              type="number" 
+              min={1} 
+              value={relabelConfig.startNumber} 
+              onChange={(e) => setRelabelConfig({ ...relabelConfig, startNumber: parseInt(e.target.value) || 1 })} 
+            />
+          )}
+
+          <div className="bg-white/5 rounded-lg p-3">
+            <p className="text-sm text-gray-400">
+              Selected seats will become: <span className="text-white font-medium">{relabelConfig.newRowLabel}1</span>, <span className="text-white font-medium">{relabelConfig.newRowLabel}2</span>, ...
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              Seats are numbered left to right based on their X position.
+            </p>
+          </div>
+
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={() => setShowRelabelModal(false)} className="flex-1">Cancel</Button>
+            <Button onClick={relabelSelectedSeats} className="flex-1">Relabel</Button>
           </div>
         </div>
       </Modal>

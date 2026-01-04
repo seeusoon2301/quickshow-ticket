@@ -45,7 +45,11 @@ export const getConcerts = async (req, res, next) => {
     // For public (no user or customer), only show published concerts
     if (!req.user || req.user.role === 'CUS') {
       query.status = 'PUB';
-      query.start_time = { $gte: new Date() };
+      // Show events that haven't ended yet (use end_time if available, otherwise start_time)
+      query.$or = [
+        { end_time: { $gte: new Date() } },
+        { end_time: null, start_time: { $gte: new Date() } }
+      ];
     } else {
       if (status && status !== 'all') {
         query.status = status;
@@ -303,7 +307,8 @@ export const updateConcert = async (req, res, next) => {
     const allowedUpdates = [
       'title', 'description', 'category', 'genre',
       'start_time', 'end_time', 'thumbnail', 'images',
-      'policies', 'artists', 'featured', 'trending'
+      'policies', 'artists', 'featured', 'trending',
+      'performances'
     ];
 
     if (req.user.role === 'ADMIN') {
@@ -709,7 +714,10 @@ export const getFeaturedConcerts = async (req, res, next) => {
 
     const query = {
       status: 'PUB',
-      start_time: { $gte: new Date() }
+      $or: [
+        { end_time: { $gte: new Date() } },
+        { end_time: null, start_time: { $gte: new Date() } }
+      ]
     };
 
     if (type === 'featured') {
