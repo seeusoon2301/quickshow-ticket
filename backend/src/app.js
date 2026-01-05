@@ -28,7 +28,7 @@ import eventZoneRoutes from './routes/eventZone.routes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 const app = express();
-
+app.use(express.json());
 /**
  * Middleware
  */

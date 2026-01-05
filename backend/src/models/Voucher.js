@@ -11,7 +11,12 @@ const voucherSchema = new mongoose.Schema({
     uppercase: true,
     trim: true
   },
-  discount_percent: {
+  discount_type: {
+    type: String,
+    enum: ['PERCENTAGE', 'FIXED'],
+    default: 'PERCENTAGE'
+  },
+  discount_value: {
     type: Number,
     required: true,
     min: 0,
@@ -25,6 +30,7 @@ const voucherSchema = new mongoose.Schema({
     type: Number, // Minimum order to use voucher
     default: 0
   },
+  usage_limit: { type: Number, default: 100 }, // Total number of times voucher can be used
   valid_from: {
     type: Date,
     default: Date.now
@@ -54,7 +60,7 @@ const voucherSchema = new mongoose.Schema({
   description: String,
   active: {
     type: Boolean,
-    default: true
+    default: false
   }
 }, { timestamps: true });
 

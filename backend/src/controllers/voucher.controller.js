@@ -17,7 +17,7 @@ export const getVouchers = async (req, res, next) => {
 
     const query = {};
     if (status === 'active') {
-      query.is_active = true;
+      query.active = true;
       query.valid_from = { $lte: new Date() };
       query.valid_until = { $gte: new Date() };
     } else if (status === 'expired') {
@@ -97,7 +97,7 @@ export const validateVoucher = async (req, res, next) => {
     }
 
     // Check if voucher is active
-    if (!voucher.is_active) {
+    if (!voucher.active) {
       return res.json({
         success: false,
         valid: false,
@@ -164,7 +164,8 @@ export const validateVoucher = async (req, res, next) => {
           code: voucher.code,
           discount_type: voucher.discount_type,
           discount_value: voucher.discount_value,
-          max_discount: voucher.max_discount
+          max_discount: voucher.max_discount,
+          usage_limit: voucher.usage_limit
         },
         calculated_discount: discount,
         final_amount: totalAmount - discount
@@ -188,7 +189,7 @@ export const createVoucher = async (req, res, next) => {
       discount_value,
       max_discount,
       min_purchase,
-      max_uses,
+      usage_limit,
       valid_from,
       valid_until,
       concerts,
@@ -207,7 +208,7 @@ export const createVoucher = async (req, res, next) => {
       discount_value,
       max_discount,
       min_purchase,
-      max_uses,
+      usage_limit,
       valid_from,
       valid_until,
       concerts,
@@ -274,7 +275,7 @@ export const deleteVoucher = async (req, res, next) => {
 
     if (voucher.used_count > 0) {
       // Soft delete - just deactivate
-      voucher.is_active = false;
+      voucher.active = false;
       await voucher.save();
       return res.json({
         success: true,
@@ -306,12 +307,12 @@ export const toggleVoucher = async (req, res, next) => {
       throw new ApiError(404, 'Voucher not found');
     }
 
-    voucher.is_active = !voucher.is_active;
+    voucher.active = !voucher.active;
     await voucher.save();
 
     res.json({
       success: true,
-      message: `Voucher ${voucher.is_active ? 'activated' : 'deactivated'}`,
+      message: `Voucher ${voucher.active ? 'activated' : 'deactivated'}`,
       data: voucher
     });
   } catch (error) {
