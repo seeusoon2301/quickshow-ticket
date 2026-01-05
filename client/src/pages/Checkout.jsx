@@ -105,17 +105,46 @@ const Checkout = () => {
   };
 
   const handleProceedPayment = () => {
-    navigate("/payment", {
-      state: {
-        cartItems,
-        subtotal,
-        serviceFee,
-        discount,
-        total: finalTotal,
-        voucher: voucherApplied,
+    // Nếu không có sản phẩm trong giỏ hàng, không làm gì cả
+    if (!hasItems) {
+      alert("Your cart is empty.");
+      return;
+    }
+
+    // Giả sử trang Payment xử lý thông tin từ sản phẩm ĐẦU TIÊN trong giỏ hàng
+    const firstItem = cartItems[0];
+
+    // *** TẠO ĐÚNG CẤU TRÚC DỮ LIỆU MÀ TRANG PAYMENT CẦN ***
+    const paymentState = {
+      // Tái cấu trúc lại đối tượng 'event'
+      event: {
+        _id: firstItem.eventId,
+        title: firstItem.eventTitle,
+        thumbnail: firstItem.eventThumbnail,
+        // Thêm các thuộc tính khác của event nếu cần
       },
-    });
+      // Trang Payment mong đợi 'selectedSeats', ta có thể truyền cả giỏ hàng vào đây
+      selectedSeats: cartItems.map(item => ({
+          ...item.seatInfo, // Giả sử thông tin ghế ngồi được lưu trong item
+          price: item.price,
+          quantity: item.quantity,
+      })),
+      // Tái cấu trúc lại 'ticketClass'
+      ticketClass: {
+        name: firstItem.ticketClassName
+      },
+      // Các thông tin tài chính
+      subtotal,
+      serviceFee,
+      discount,
+      total: finalTotal,
+      voucher: voucherApplied,
+    };
+
+    // Điều hướng với state đã được chuẩn hóa
+    navigate("/payment", { state: paymentState });
   };
+
 
   // Show empty cart state
   if (!hasItems && !directCheckout) {

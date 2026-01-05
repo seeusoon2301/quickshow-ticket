@@ -358,7 +358,7 @@ const Payment = () => {
                   type="tel"
                   value={customerInfo.phone}
                   onChange={(e) => setCustomerInfo({ ...customerInfo, phone: e.target.value })}
-                  className="w-full px-4 py-3 rounded-lg bg-black/30 border border-gray-700 focus:border-primary focus:outline-none"
+                  className="w-full px-4 py-3 rounded-lg bg-black/30 border border-gray-700 focus:border-primary focus:outline-none placeholder:text-gray-500"
                   placeholder="0901234567"
                 />
               </div>
@@ -451,7 +451,7 @@ const Payment = () => {
 
             <button
               onClick={handlePayment}
-              disabled={processing || !paymentMethod}
+              disabled={processing || !paymentMethod || !customerInfo.fullName.trim() || !customerInfo.email.trim() || !customerInfo.phone.trim()}
               className="w-full py-4 bg-primary text-black font-bold text-lg rounded-lg hover:bg-primary-dull transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {processing ? (

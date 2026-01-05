@@ -60,22 +60,44 @@ export default function VouchersList() {
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
+
+    // Tạo payload để gửi đi, đồng thời chuyển đổi và dọn dẹp dữ liệu
+    const payload = {
+      code: form.code,
+      description: form.description,
+      valid_from: form.valid_from,
+      valid_until: form.valid_until,
+      active: form.active,
+
+      // Chuyển đổi chuỗi rỗng thành null và parse thành số
+      discount_percent: form.discount_value ? parseFloat(form.discount_value) : null,
+      max_amount: form.max_discount ? parseFloat(form.max_discount) : null,
+      min_order_amount: form.min_purchase ? parseFloat(form.min_purchase) : null,
+      usage_limit: form.max_uses ? parseInt(form.max_uses, 10) : null,
+    };
+
+    // BƯỚC GỠ LỖI QUAN TRỌNG: Kiểm tra payload trước khi gửi
+    console.log('Data being sent to API:', payload);
+
     try {
       if (modal.voucher) {
-        await voucherService.updateVoucher(authFetch, modal.voucher._id, form);
+        await voucherService.updateVoucher(authFetch, modal.voucher._id, payload);
         toast.success('Voucher updated');
       } else {
-        await voucherService.createVoucher(authFetch, form);
+        await voucherService.createVoucher(authFetch, payload);
         toast.success('Voucher created');
       }
       setModal({ type: null, voucher: null });
       fetchVouchers();
     } catch (error) {
-      toast.error(error.message);
+      // Log lỗi từ server để xem chi tiết hơn
+      console.error('API Error:', error);
+      toast.error(error.message || 'An unexpected error occurred.');
     } finally {
       setSaving(false);
     }
   };
+
 
   const handleDelete = async () => {
     try {

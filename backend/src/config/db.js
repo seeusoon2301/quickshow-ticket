@@ -73,16 +73,16 @@ async function initializeDatabase() {
     const adminExists = await User.findOne({ email: 'admin@gmail.com' });
     
     if (!adminExists) {
-      const passwordHash = await bcrypt.hash('admin123', 10);
+      //const passwordHash = await bcrypt.hash('admin123', 10);
       await User.create({
         username: 'admin',
         email: 'admin@gmail.com',
-        password_hash: passwordHash,
+        password_hash: 'admin123',
         fullName: 'Administrator',
         phone: '0901234567',
         role: 'ADMIN',
         status: true,
-        email_verified: true
+        emailVerified: true
       });
       console.log('✅ Default admin account created (admin@gmail.com / admin123)');
     }
