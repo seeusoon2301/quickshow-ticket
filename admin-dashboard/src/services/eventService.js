@@ -150,6 +150,89 @@ export const unassignSeats = async (authFetch, concertId, seatIds) => {
   return handleResponse(response);
 };
 
+// =============================================================================
+// EVENT ZONE MANAGEMENT (POLYGON-BASED SYSTEM)
+// =============================================================================
+
+/**
+ * Get event zones for a concert
+ */
+export const getEventZones = async (authFetch, concertId) => {
+  const response = await authFetch(`${API_URL}/concerts/${concertId}/zones`);
+  return handleResponse(response);
+};
+
+/**
+ * Get complete seat map for an event (zones with seats)
+ */
+export const getEventSeatMap = async (authFetch, concertId) => {
+  const response = await authFetch(`${API_URL}/concerts/${concertId}/seatmap`);
+  return handleResponse(response);
+};
+
+/**
+ * Create a new event zone (polygon)
+ * @param {Object} zoneData - Zone data including:
+ *   - name: Zone name
+ *   - ticketClassId: Associated ticket class
+ *   - color: Zone color
+ *   - polygonPoints: Array of {x, y} points defining the polygon
+ *   - rowLabelMapping: Object mapping row numbers to labels
+ *   - columnLabelSuffix: Optional suffix for seat labels
+ *   - floor: Floor number
+ *   - section: LEFT/CENTER/RIGHT
+ */
+export const createEventZone = async (authFetch, concertId, zoneData) => {
+  const response = await authFetch(`${API_URL}/concerts/${concertId}/zones`, {
+    method: 'POST',
+    body: JSON.stringify(zoneData),
+  });
+  return handleResponse(response);
+};
+
+/**
+ * Update a single event zone
+ */
+export const updateEventZone = async (authFetch, concertId, zoneId, data) => {
+  const response = await authFetch(`${API_URL}/concerts/${concertId}/zones/${zoneId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+/**
+ * Delete an event zone
+ */
+export const deleteEventZone = async (authFetch, concertId, zoneId) => {
+  const response = await authFetch(`${API_URL}/concerts/${concertId}/zones/${zoneId}`, {
+    method: 'DELETE',
+  });
+  return handleResponse(response);
+};
+
+/**
+ * Batch save zones (create/update/delete multiple)
+ */
+export const batchSaveZones = async (authFetch, concertId, { zones, deleteZoneIds }) => {
+  const response = await authFetch(`${API_URL}/concerts/${concertId}/zones/batch`, {
+    method: 'POST',
+    body: JSON.stringify({ zones, deleteZoneIds }),
+  });
+  return handleResponse(response);
+};
+
+/**
+ * Generate show seats for all configured event zones
+ */
+export const generateEventSeats = async (authFetch, concertId, options = {}) => {
+  const response = await authFetch(`${API_URL}/concerts/${concertId}/zones/generate-seats`, {
+    method: 'POST',
+    body: JSON.stringify(options),
+  });
+  return handleResponse(response);
+};
+
 /**
  * Status configuration
  */

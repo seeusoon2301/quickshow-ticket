@@ -1,7 +1,7 @@
 /**
  * QuickShow Ticket - Models Index (ES Modules)
  * 
- * Based on ERD with 12 entities
+ * Based on ERD with 13 entities
  * 
  * ENTITY RELATIONSHIPS (UPDATED):
  * ================================
@@ -10,23 +10,38 @@
  *   └── customer, staff, organizer, admin (embedded fields)
  * 
  * Venue
- *   └── Seat (1:N) - Physical seat layout template
+ *   ├── Zone (1:N) - Physical zone areas with shapes/bounds
+ *   └── Seat (1:N) - Physical seat layout template (seats belong to zones)
+ * 
+ * Zone (Venue physical areas)
+ *   ├── Venue (N:1)
+ *   ├── Seat (1:N) - Seats within this zone
+ *   └── EventZone (1:N) - Event-specific configurations
+ * 
+ * EventZone (Event-specific zone configuration) *** NEW ***
+ *   ├── Concert (N:1) - Which event
+ *   ├── Zone (N:1) - Which physical zone
+ *   ├── TicketClass (N:1) - Pricing tier for this zone in this event
+ *   ├── color - Background color for zone painting
+ *   └── rowLabelMapping - Custom row labels (1→"AT", 2→"BT", etc.)
  * 
  * Concert (Event)
  *   ├── Venue (N:1)
  *   ├── Organizer/User (N:1)
  *   ├── Artist (N:M)
  *   ├── TicketClass (1:N) - Pricing tiers with colors
+ *   ├── EventZone (1:N) - Zone configurations for this event
  *   └── ShowSeat (1:N) - Seat assignments for this event
  * 
  * TicketClass
  *   ├── Concert (N:1)
- *   ├── color - For visual "painting" of seats
+ *   ├── color - For visual "painting" of zone backgrounds
  *   └── Ticket (1:N)
  * 
  * ShowSeat ("Painted" seat assignment)
  *   ├── Concert (N:1)
  *   ├── Seat (N:1) - From venue's seat layout
+ *   ├── EventZone (N:1) - Zone config for display labels
  *   ├── TicketClass (N:1) - Which pricing tier
  *   └── Ticket (1:1)
  * 
@@ -46,6 +61,7 @@ import User from './User.js';
 import Artist from './Artist.js';
 import Venue from './Venue.js';
 import Zone from './Zone.js';
+import EventZone from './EventZone.js';
 import Seat from './Seat.js';
 import Concert from './Concert.js';
 import Category from './Category.js';
@@ -62,6 +78,7 @@ export {
   Artist,
   Venue,
   Zone,
+  EventZone,
   Seat,
   Concert,
   Category,
@@ -79,6 +96,7 @@ export default {
   Artist,
   Venue,
   Zone,
+  EventZone,
   Seat,
   Concert,
   Category,

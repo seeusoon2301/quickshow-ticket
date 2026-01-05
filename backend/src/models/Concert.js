@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 /**
  * Concert Model - Main event entity
  */
+
 const concertSchema = new mongoose.Schema({
   title: {
     type: String,
@@ -22,6 +23,13 @@ const concertSchema = new mongoose.Schema({
     type: String, // pop, rock, jazz, EDM, classical, etc.
     trim: true
   },
+  // Multiple performance slots
+  performances: [{
+    date: { type: Date, required: true },
+    startTime: { type: String, required: true },
+    endTime: { type: String, required: true },
+    ticket_classes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'TicketClass' }]
+  }],
   start_time: {
     type: Date,
     required: true

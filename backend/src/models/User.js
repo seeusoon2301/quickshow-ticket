@@ -81,6 +81,7 @@ const userSchema = new mongoose.Schema({
   organizer: {
     company_name: String,
     tax_code: String,
+    description: String, // Description about the organizer
     verified: { type: Boolean, default: false }
   }
   

@@ -11,7 +11,16 @@ import {
   deleteSeats,
   updateSeat,
   getVenueCapacity,
-  generateSeats
+  generateSeats,
+  // Zone management
+  getVenueZones,
+  createZone,
+  updateZone,
+  deleteZone,
+  getZoneWithSeats,
+  generateZoneSeats,
+  saveVenueLayout,
+  getVenueLayout
 } from '../controllers/venue.controller.js';
 import { authenticate } from '../middleware/auth.js';
 import { isAdmin } from '../middleware/roles.js';
@@ -23,21 +32,34 @@ const router = Router();
  * Base path: /api/venues
  * 
  * NEW STRUCTURE:
- * - Venues have Seats directly (no zones)
- * - Seat layouts are templates for the venue
- * - TicketClasses are per-event, managed via concert routes
+ * - Venues have Zones (physical areas with shapes/bounds)
+ * - Zones contain Seats (physical seat layout templates)
+ * - EventZones link zones to events with custom colors, labels, pricing
+ * - ShowSeats track seat availability per event
  */
 
-// Public routes
+// Public routes - Venue
 router.get('/', getVenues);
 router.get('/:id', getVenueById);
+router.get('/:id/layout', getVenueLayout);
 router.get('/:id/seats', getVenueSeats);
 router.get('/:id/capacity', getVenueCapacity);
+
+// Public routes - Zones
+router.get('/:id/zones', getVenueZones);
+router.get('/:id/zones/:zoneId', getZoneWithSeats);
 
 // Admin routes - Venue CRUD
 router.post('/', authenticate, isAdmin, createVenue);
 router.put('/:id', authenticate, isAdmin, updateVenue);
 router.delete('/:id', authenticate, isAdmin, deleteVenue);
+router.put('/:id/layout', authenticate, isAdmin, saveVenueLayout);
+
+// Admin routes - Zone Management
+router.post('/:id/zones', authenticate, isAdmin, createZone);
+router.put('/:id/zones/:zoneId', authenticate, isAdmin, updateZone);
+router.delete('/:id/zones/:zoneId', authenticate, isAdmin, deleteZone);
+router.post('/:id/zones/:zoneId/generate-seats', authenticate, isAdmin, generateZoneSeats);
 
 // Admin routes - Seat Management
 router.post('/:id/seats', authenticate, isAdmin, addSeats);

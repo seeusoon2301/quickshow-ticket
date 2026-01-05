@@ -138,6 +138,88 @@ export const generateSeats = async (authFetch, venueId, config) => {
 };
 
 // ========================
+// Zone Management
+// ========================
+
+/**
+ * Get all zones for a venue
+ */
+export const getVenueZones = async (authFetch, venueId) => {
+  const response = await authFetch(`${API_URL}/venues/${venueId}/zones`);
+  return handleResponse(response);
+};
+
+/**
+ * Get complete venue layout (zones and seats)
+ */
+export const getVenueLayout = async (authFetch, venueId) => {
+  const response = await authFetch(`${API_URL}/venues/${venueId}/layout`);
+  return handleResponse(response);
+};
+
+/**
+ * Create a new zone
+ */
+export const createZone = async (authFetch, venueId, zoneData) => {
+  const response = await authFetch(`${API_URL}/venues/${venueId}/zones`, {
+    method: 'POST',
+    body: JSON.stringify(zoneData),
+  });
+  return handleResponse(response);
+};
+
+/**
+ * Update a zone
+ */
+export const updateZone = async (authFetch, venueId, zoneId, zoneData) => {
+  const response = await authFetch(`${API_URL}/venues/${venueId}/zones/${zoneId}`, {
+    method: 'PUT',
+    body: JSON.stringify(zoneData),
+  });
+  return handleResponse(response);
+};
+
+/**
+ * Delete a zone
+ */
+export const deleteZone = async (authFetch, venueId, zoneId) => {
+  const response = await authFetch(`${API_URL}/venues/${venueId}/zones/${zoneId}`, {
+    method: 'DELETE',
+  });
+  return handleResponse(response);
+};
+
+/**
+ * Get zone with seats
+ */
+export const getZoneWithSeats = async (authFetch, venueId, zoneId) => {
+  const response = await authFetch(`${API_URL}/venues/${venueId}/zones/${zoneId}`);
+  return handleResponse(response);
+};
+
+/**
+ * Generate seats for a zone
+ */
+export const generateZoneSeats = async (authFetch, venueId, zoneId, options = {}) => {
+  const response = await authFetch(`${API_URL}/venues/${venueId}/zones/${zoneId}/generate-seats`, {
+    method: 'POST',
+    body: JSON.stringify(options),
+  });
+  return handleResponse(response);
+};
+
+/**
+ * Save venue layout (canvas, stage, floors, zones)
+ */
+export const saveVenueLayout = async (authFetch, venueId, layoutData) => {
+  const response = await authFetch(`${API_URL}/venues/${venueId}/layout`, {
+    method: 'PUT',
+    body: JSON.stringify(layoutData),
+  });
+  return handleResponse(response);
+};
+
+// ========================
 // Defaults & Constants
 // ========================
 

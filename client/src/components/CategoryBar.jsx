@@ -109,9 +109,7 @@ const CategoryBar = ({
 
         {/* Category Buttons */}
         {categories.map((cat) => {
-          const IconComponent = iconMap[cat.icon] || MoreHorizontal;
           const isSelected = selectedCategory === cat.slug;
-          
           return (
             <button
               key={cat._id}
@@ -123,7 +121,6 @@ const CategoryBar = ({
               }`}
               style={isSelected ? { backgroundColor: cat.color || "#F84565" } : {}}
             >
-              <IconComponent size={16} />
               <span>{cat.name}</span>
             </button>
           );

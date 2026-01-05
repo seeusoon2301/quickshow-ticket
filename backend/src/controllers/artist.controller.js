@@ -61,10 +61,13 @@ export const getArtistById = async (req, res, next) => {
       throw new ApiError(404, 'Artist not found');
     }
 
-    // Get upcoming concerts for this artist
+    // Get upcoming and ongoing concerts for this artist
     const concerts = await Concert.find({
       artists: artist._id,
-      start_time: { $gte: new Date() },
+      $or: [
+        { end_time: { $gte: new Date() } },
+        { end_time: null, start_time: { $gte: new Date() } }
+      ],
       status: 'PUBLISHED'
     })
       .populate('venue', 'name city')
@@ -98,7 +101,10 @@ export const getArtistBySlug = async (req, res, next) => {
 
     const concerts = await Concert.find({
       artists: artist._id,
-      start_time: { $gte: new Date() },
+      $or: [
+        { end_time: { $gte: new Date() } },
+        { end_time: null, start_time: { $gte: new Date() } }
+      ],
       status: 'PUBLISHED'
     })
       .populate('venue', 'name city')
@@ -212,9 +218,9 @@ export const getPopularArtists = async (req, res, next) => {
   try {
     const limit = parseInt(req.query.limit) || 10;
 
-    // Get artists with most upcoming concerts
+    // Get artists with most upcoming and ongoing concerts
     const popularArtists = await Concert.aggregate([
-      { $match: { start_time: { $gte: new Date() }, status: 'PUBLISHED' } },
+      { $match: { $or: [{ end_time: { $gte: new Date() } }, { end_time: null, start_time: { $gte: new Date() } }], status: 'PUBLISHED' } },
       { $unwind: '$artists' },
       { $group: { _id: '$artists', concert_count: { $sum: 1 } } },
       { $sort: { concert_count: -1 } },
