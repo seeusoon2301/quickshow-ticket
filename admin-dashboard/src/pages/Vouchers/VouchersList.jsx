@@ -58,25 +58,26 @@ export default function VouchersList() {
   };
 
   const handleSave = async (e) => {
-    e.preventDefault();
-    setSaving(true);
+  e.preventDefault();
+  setSaving(true);
 
-    // Tạo payload để gửi đi, đồng thời chuyển đổi và dọn dẹp dữ liệu
-    const payload = {
-      code: form.code,
-      description: form.description,
-      valid_from: form.valid_from,
-      valid_until: form.valid_until,
-      active: form.active,
+  // Tạo payload với các tên trường khớp chính xác với yêu cầu của bạn
+  const payload = {
+    code: form.code,
+    discount_type: form.discount_type || 'PERCENTAGE', // Lấy từ form.discount_type
+    discount_value: form.discount_value ? parseFloat(form.discount_value) : 0,
+    max_discount: form.max_discount ? parseFloat(form.max_discount) : null,
+    min_purchase: form.min_purchase ? parseFloat(form.min_purchase) : 0,
+    usage_limit: form.max_uses ? parseInt(form.max_uses, 10) : null,
+    // Giữ nguyên định dạng từ input date (YYYY-MM-DD), Backend Mongoose sẽ tự hiểu
+    valid_from: form.valid_from, 
+    valid_until: form.valid_until,
+    concerts: form.concerts || [], // Thêm mảng concerts (mặc định rỗng nếu không có)
+    description: form.description,
+    active: form.active // Có thể giữ lại để điều khiển trạng thái ẩn hiện
+  };
 
-      // Chuyển đổi chuỗi rỗng thành null và parse thành số
-      discount_percent: form.discount_value ? parseFloat(form.discount_value) : null,
-      max_amount: form.max_discount ? parseFloat(form.max_discount) : null,
-      min_order_amount: form.min_purchase ? parseFloat(form.min_purchase) : null,
-      usage_limit: form.max_uses ? parseInt(form.max_uses, 10) : null,
-    };
-
-    // BƯỚC GỠ LỖI QUAN TRỌNG: Kiểm tra payload trước khi gửi
+    // BƯỚC GỠ LỖI QUAN TRỌNG: Kiểm tra payload trong Console của trình duyệt
     console.log('Data being sent to API:', payload);
 
     try {
@@ -90,13 +91,13 @@ export default function VouchersList() {
       setModal({ type: null, voucher: null });
       fetchVouchers();
     } catch (error) {
-      // Log lỗi từ server để xem chi tiết hơn
       console.error('API Error:', error);
       toast.error(error.message || 'An unexpected error occurred.');
     } finally {
       setSaving(false);
     }
   };
+
 
 
   const handleDelete = async () => {
@@ -113,7 +114,7 @@ export default function VouchersList() {
   const handleToggle = async (voucher) => {
     try {
       await voucherService.toggleVoucher(authFetch, voucher._id);
-      toast.success(`Voucher ${voucher.is_active ? 'deactivated' : 'activated'}`);
+      toast.success(`Voucher ${voucher.active ? 'deactivated' : 'activated'}`);
       fetchVouchers();
     } catch (error) {
       toast.error(error.message);
@@ -130,12 +131,19 @@ export default function VouchersList() {
     const validFrom = new Date(voucher.valid_from);
     const validUntil = new Date(voucher.valid_until);
     
-    if (!voucher.is_active) return <Badge variant="gray">Inactive</Badge>;
+    // Sửa từ is_active thành active
+    if (!voucher.active) return <Badge variant="gray">Inactive</Badge>;
+    
     if (now < validFrom) return <Badge variant="blue">Scheduled</Badge>;
     if (now > validUntil) return <Badge variant="red">Expired</Badge>;
-    if (voucher.used_count >= voucher.max_uses) return <Badge variant="yellow">Depleted</Badge>;
+    
+    if (voucher.usage_limit && voucher.used_count >= voucher.usage_limit) {
+      return <Badge variant="yellow">Depleted</Badge>;
+    }
+    
     return <Badge variant="emerald">Active</Badge>;
   };
+
 
   if (loading && vouchers.length === 0) return <PageLoader />;
 
@@ -188,7 +196,7 @@ export default function VouchersList() {
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-1 text-white">
                           {voucher.discount_type === 'PERCENTAGE' ? (
-                            <><Percent size={14} className="text-primary" /> {voucher.discount_value}%</>
+                            <><Percent size={14} className="text-primary" /> {voucher.discount_value}</>
                           ) : (
                             <>{formatCurrency(voucher.discount_value)}</>
                           )}
@@ -196,7 +204,7 @@ export default function VouchersList() {
                         {voucher.max_discount > 0 && <p className="text-xs text-gray-500">Max: {formatCurrency(voucher.max_discount)}</p>}
                       </td>
                       <td className="px-5 py-4">
-                        <p className="text-white">{voucher.used_count || 0} / {voucher.max_uses}</p>
+                        <p className="text-white">{voucher.used_count || 0} / {voucher.usage_limit}</p>
                         <div className="w-20 h-1 bg-white/10 rounded-full mt-1">
                           <div className="h-full bg-primary rounded-full" style={{ width: `${Math.min(100, ((voucher.used_count || 0) / voucher.max_uses) * 100)}%` }} />
                         </div>
@@ -208,8 +216,8 @@ export default function VouchersList() {
                       <td className="px-5 py-4">{getStatusBadge(voucher)}</td>
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-1">
-                          <button onClick={() => handleToggle(voucher)} className={`p-2 rounded-lg ${voucher.is_active ? 'text-emerald-400 hover:bg-emerald-500/10' : 'text-gray-400 hover:bg-white/5'}`}>
-                            {voucher.is_active ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
+                          <button onClick={() => handleToggle(voucher)} className={`p-2 rounded-lg ${voucher.active ? 'text-emerald-400 hover:bg-emerald-500/10' : 'text-gray-400 hover:bg-white/5'}`}>
+                            {voucher.active ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
                           </button>
                           <button onClick={() => openModal('form', voucher)} className="p-2 text-gray-400 hover:bg-white/5 rounded-lg"><Edit size={16} /></button>
                           <button onClick={() => openModal('delete', voucher)} className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg"><Trash2 size={16} /></button>
@@ -231,7 +239,7 @@ export default function VouchersList() {
         title={modal.voucher ? 'Edit Voucher' : 'Add Voucher'} size="md">
         <form onSubmit={handleSave} className="space-y-4">
           <div className="flex gap-4">
-            <Input label="Code *" required value={form.code} onChange={e => setForm({ ...form, code: e.target.value.toUpperCase() })} className="flex-1" />
+            <Input label="Code " required value={form.code} onChange={e => setForm({ ...form, code: e.target.value.toUpperCase() })} className="flex-1" />
             <Button type="button" variant="outline" onClick={() => setForm({ ...form, code: voucherService.generateVoucherCode() })} className="mt-7">
               Generate
             </Button>
@@ -240,7 +248,7 @@ export default function VouchersList() {
           <div className="grid grid-cols-2 gap-4">
             <Select label="Type" value={form.discount_type} onChange={e => setForm({ ...form, discount_type: e.target.value })}
               options={[{ value: 'PERCENTAGE', label: 'Percentage (%)' }, { value: 'FIXED', label: 'Fixed Amount' }]} />
-            <Input label="Discount Value *" type="number" required value={form.discount_value}
+            <Input label="Discount Value " type="number" required value={form.discount_value}
               onChange={e => setForm({ ...form, discount_value: e.target.value })} />
           </div>
 
@@ -251,13 +259,13 @@ export default function VouchersList() {
               onChange={e => setForm({ ...form, min_purchase: e.target.value })} />
           </div>
 
-          <Input label="Max Uses *" type="number" required value={form.max_uses}
+          <Input label="Max Uses " type="number" required value={form.max_uses}
             onChange={e => setForm({ ...form, max_uses: e.target.value })} />
 
           <div className="grid grid-cols-2 gap-4">
-            <Input label="Valid From *" type="date" required value={form.valid_from}
+            <Input label="Valid From " type="date" required value={form.valid_from}
               onChange={e => setForm({ ...form, valid_from: e.target.value })} />
-            <Input label="Valid Until *" type="date" required value={form.valid_until}
+            <Input label="Valid Until " type="date" required value={form.valid_until}
               onChange={e => setForm({ ...form, valid_until: e.target.value })} />
           </div>
 

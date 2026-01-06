@@ -58,7 +58,7 @@ export const deleteVoucher = async (authFetch, voucherId) => {
  */
 export const toggleVoucher = async (authFetch, voucherId) => {
   const response = await authFetch(`${API_URL}/vouchers/${voucherId}/toggle`, {
-    method: 'PUT',
+    method: 'PATCH',
   });
   return handleResponse(response);
 };
