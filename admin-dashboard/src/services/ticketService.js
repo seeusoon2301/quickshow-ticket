@@ -8,9 +8,11 @@ import { API_URL, buildQueryString, handleResponse } from './api';
  * Get ticket classes for concert
  */
 export const getTicketClasses = async (authFetch, concertId) => {
-  const query = buildQueryString({ concert: concertId });
-  const response = await authFetch(`${API_URL}/ticket-classes?${query}`);
-  return handleResponse(response);
+  // Backend exposes ticket classes as part of the concert payload
+  const response = await authFetch(`${API_URL}/concerts/${concertId}`);
+  const data = await handleResponse(response);
+  // normalize to previous shape: { data: { ticketClasses: [...] } }
+  return { data: { ticketClasses: data.data.ticketClasses || [] } };
 };
 
 /**
@@ -94,12 +96,12 @@ export const getCheckInList = async (authFetch, concertId, { page = 1, status })
  * Ticket class presets
  */
 export const TICKET_PRESETS = [
-  { name: 'VIP', price: 2000000, benefits: ['Best seats', 'Meet & greet', 'VIP lounge'] },
-  { name: 'Premium', price: 1500000, benefits: ['Priority entry', 'Good seats'] },
-  { name: 'Standard', price: 800000, benefits: ['General admission'] },
-  { name: 'Early Bird', price: 600000, benefits: ['Discounted price', 'Limited availability'] },
-  { name: 'Student', price: 400000, benefits: ['Student discount', 'ID required'] },
-  { name: 'Group (5+)', price: 3500000, benefits: ['Group of 5', 'Discounted rate'] },
+  { name: 'VIP', price: 2000000 },
+  { name: 'Premium', price: 1500000 },
+  { name: 'Standard', price: 800000 },
+  { name: 'Early Bird', price: 600000 },
+  { name: 'Student', price: 400000 },
+  { name: 'Group (5+)', price: 3500000 },
 ];
 
 /**
@@ -107,12 +109,9 @@ export const TICKET_PRESETS = [
  */
 export const DEFAULT_TICKET_FORM = {
   concert: '',
-  zone: '',
   name: '',
   price: 0,
-  quota: 0,
   open_time: '',
   close_time: '',
-  description: '',
-  benefits: [],
+  // zone/quota/description/benefits removed from editable form per admin request
 };

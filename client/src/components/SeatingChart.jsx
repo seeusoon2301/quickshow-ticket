@@ -4,6 +4,18 @@ import { useUser, useClerk } from '@clerk/clerk-react';
 import api from '../services/api';
 import { connectSocket, disconnectSocket, getSocket } from '../services/socket';
 
+const isTicketClassOpenNow = (tc) => {
+  if (!tc) return true;
+  try {
+    const now = new Date();
+    if (tc.open_time && new Date(tc.open_time) > now) return false;
+    if (tc.close_time && new Date(tc.close_time) < now) return false;
+    return true;
+  } catch (e) {
+    return true;
+  }
+};
+
 const Seat = ({ seat, isSelected, onClick, statusOverridden }) => {
   const base = {
     width: 28,
@@ -21,12 +33,20 @@ const Seat = ({ seat, isSelected, onClick, statusOverridden }) => {
   const status = statusOverridden || seat.status;
 
   const style = { ...base, position: 'absolute', left: seat.x, top: seat.y };
+  // If ticket class exists but is not currently on sale, treat as not available for purchase
+  const ticketClassClosed = seat.ticketClass && !isTicketClassOpenNow(seat.ticketClass);
 
   if (status === 'SOLD' || status === 'UNASSIGNED') {
+  if (status === 'SOLD' || status === 'UNASSIGNED' || ticketClassClosed) {
     style.background = '#b91c1c';
     style.border = '1px solid #7f1d1d';
     style.cursor = 'not-allowed';
   } else if (status === 'LOCKED') {
+        const allowClick = isSelected || seat.status === 'AVAILABLE' || status === 'AVAILABLE';
+        // disallow click if ticket class closed
+        if (ticketClassClosed) return;
+        if (allowClick) onClick(seat);
+      }}
     // If this seat is locked but it's selected by current user, show as selected and allow unselect
     if (isSelected) {
       style.background = '#ffffff';
@@ -112,6 +132,39 @@ const SeatingChart = ({ concertId, initialSelected = [], onChange, scale = 1 }) 
       if (status === 'AVAILABLE') {
         setSelected(prev => prev.filter(id => !seatIds.includes(id)));
       }
+    });
+
+    // Listen for price updates (when admin updates ticket class price)
+    socket.on('seats-price-updated', (data) => {
+      const { seatIds = [], ticketClassId, price } = data || {};
+      setSeats(prev => prev.map(s => {
+        // update by showSeatId or by ticketClass reference
+        const matchesSeat = seatIds.includes(s.showSeatId) || seatIds.includes(s._id);
+        const matchesClass = s.ticketClass && (s.ticketClass._id === ticketClassId || s.ticketClass === ticketClassId);
+        if (matchesSeat || matchesClass) {
+          return {
+            ...s,
+            price,
+            ticketClass: s.ticketClass ? { ...s.ticketClass, price } : s.ticketClass
+          };
+        }
+        return s;
+      }));
+    });
+
+    socket.on('seats-sale-window-updated', (data) => {
+      const { seatIds = [], ticketClassId, open_time, close_time } = data || {};
+      setSeats(prev => prev.map(s => {
+        const matchesSeat = seatIds.includes(s.showSeatId) || seatIds.includes(s._id);
+        const matchesClass = s.ticketClass && (s.ticketClass._id === ticketClassId || s.ticketClass === ticketClassId);
+        if (matchesSeat || matchesClass) {
+          return {
+            ...s,
+            ticketClass: s.ticketClass ? { ...s.ticketClass, open_time, close_time } : s.ticketClass
+          };
+        }
+        return s;
+      }));
     });
 
     return () => {

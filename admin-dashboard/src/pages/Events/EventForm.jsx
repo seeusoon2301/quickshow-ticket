@@ -78,6 +78,15 @@ export default function EventForm() {
           const c = data.data.concert;
           const start = new Date(c.start_time);
           const end = c.end_time ? new Date(c.end_time) : null;
+          const toLocalDateInput = (dateVal) => {
+            if (!dateVal) return '';
+            const d = new Date(dateVal);
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+          };
+
           setForm({
             title: c.title,
             description: c.description || '',
@@ -88,7 +97,9 @@ export default function EventForm() {
             artists: c.artists?.map(a => a._id) || [],
             performances: (c.performances || []).map(perf => ({
               ...perf,
-              date: perf.date ? new Date(perf.date).toISOString().split('T')[0] : ''
+              date: perf.date ? toLocalDateInput(perf.date) : '',
+              startTime: perf.startTime || perf.start_time || '',
+              endTime: perf.endTime || perf.end_time || ''
             })),
           });
           // Use ticketClasses from the event fetch response
@@ -107,11 +118,21 @@ export default function EventForm() {
     e.preventDefault();
     setSaving(true);
     try {
-      // Convert date strings to Date objects for performances
-      const performances = form.performances.map(perf => ({
-        ...perf,
-        date: perf.date ? new Date(perf.date + 'T00:00:00Z') : null
-      }));
+      // Convert performances (date + startTime/endTime) to standardized payload
+      const performances = form.performances.map(perf => {
+        const perfPayload = { ...perf };
+        if (perf.date) {
+          const [y, m, d] = perf.date.split('-').map(Number);
+          // store date as UTC ISO for the day's midnight in local timezone
+          perfPayload.date = new Date(y, m - 1, d).toISOString();
+        } else {
+          perfPayload.date = null;
+        }
+        perfPayload.startTime = perf.startTime || perf.start_time || '';
+        perfPayload.endTime = perf.endTime || perf.end_time || '';
+        return perfPayload;
+      });
+
       const payload = {
         title: form.title,
         description: form.description,

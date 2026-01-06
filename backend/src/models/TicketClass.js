@@ -41,8 +41,7 @@ const ticketClassSchema = new mongoose.Schema({
   close_time: {
     type: Date // When ticket sales end
   },
-  description: String,
-  benefits: [String], // VIP lounge access, Meet & greet, etc.
+  // description and benefits removed per admin requirements
   sortOrder: {
     type: Number,
     default: 0 // For display ordering

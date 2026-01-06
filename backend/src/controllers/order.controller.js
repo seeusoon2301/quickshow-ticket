@@ -48,7 +48,7 @@ export const lockSeats = async (req, res, next) => {
       const showSeat = await ShowSeat.findOne({
         _id: seatId,
         concert: concertId
-      }).populate('seat');
+      }).populate('seat ticketClass');
 
       if (!showSeat) {
         failedSeats.push({ seatId, reason: 'Seat not found' });
@@ -61,6 +61,14 @@ export const lockSeats = async (req, res, next) => {
           reason: showSeat.status === 'SOLD' ? 'Seat already sold' : 'Seat is being held by another user' 
         });
         continue;
+      }
+
+      // Check ticket class sale window
+      if (showSeat.ticketClass) {
+        if (typeof showSeat.ticketClass.isSalesOpen === 'function' && !showSeat.ticketClass.isSalesOpen()) {
+          failedSeats.push({ seatId, reason: `Sales for "${showSeat.ticketClass.name}" are closed` });
+          continue;
+        }
       }
 
       try {
@@ -205,6 +213,10 @@ export const createOrder = async (req, res, next) => {
 
     // Create tickets and order details
     for (const showSeat of showSeats) {
+      // Ensure ticket class is still on sale before creating order
+      if (showSeat.ticketClass && typeof showSeat.ticketClass.isSalesOpen === 'function' && !showSeat.ticketClass.isSalesOpen()) {
+        throw new ApiError(400, `Ticket class ${showSeat.ticketClass.name} is no longer on sale`);
+      }
       // Create ticket
       const ticket = await Ticket.create({
         showSeat: showSeat._id,

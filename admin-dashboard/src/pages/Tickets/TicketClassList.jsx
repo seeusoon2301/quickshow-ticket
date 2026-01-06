@@ -7,8 +7,9 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
 import { ArrowLeft, Plus, Edit2, Trash2, Ticket, DollarSign, Users, Calendar, Star, Tag } from 'lucide-react';
-import { PageLoader, Button, Card, Badge, Modal, Input, Textarea, Select, ConfirmDialog } from '../../components/ui';
+import { PageLoader, Button, Card, Badge, Modal, Input, ConfirmDialog } from '../../components/ui';
 import * as ticketService from '../../services/ticketService';
+import * as eventService from '../../services/eventService';
 import { formatCurrency, API_URL } from '../../services/api';
 
 export default function TicketClassList() {
@@ -22,7 +23,6 @@ export default function TicketClassList() {
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState({ type: null, ticket: null });
   const [form, setForm] = useState(ticketService.DEFAULT_TICKET_FORM);
-  const [newBenefit, setNewBenefit] = useState('');
   const [saving, setSaving] = useState(false);
 
   const fetchData = useCallback(async () => {
@@ -52,36 +52,52 @@ export default function TicketClassList() {
   const openModal = (type, ticket = null) => {
     setModal({ type, ticket });
     if (ticket) {
-      setForm({ ...ticket, open_time: ticket.open_time?.slice(0, 16), close_time: ticket.close_time?.slice(0, 16) });
+      const toLocalDateTimeInput = (dateVal) => {
+        if (!dateVal) return '';
+        const d = new Date(dateVal);
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const hh = String(d.getHours()).padStart(2, '0');
+        const min = String(d.getMinutes()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+      };
+      setForm({ ...ticket, open_time: toLocalDateTimeInput(ticket.open_time), close_time: toLocalDateTimeInput(ticket.close_time), includeLocked: false });
     } else {
       setForm({ ...ticketService.DEFAULT_TICKET_FORM, concert: concertId });
     }
   };
 
   const applyPreset = (preset) => {
-    setForm(f => ({ ...f, name: preset.name, description: preset.description, benefits: preset.benefits }));
+    setForm(f => ({ ...f, name: preset.name, price: preset.price }));
   };
 
-  const addBenefit = () => {
-    if (newBenefit.trim()) {
-      setForm(f => ({ ...f, benefits: [...(f.benefits || []), newBenefit.trim()] }));
-      setNewBenefit('');
-    }
-  };
-
-  const removeBenefit = (index) => {
-    setForm(f => ({ ...f, benefits: f.benefits.filter((_, i) => i !== index) }));
-  };
+  // description/benefits removed from form
 
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
     try {
+      // Convert datetime-local fields (local) to UTC ISO strings before sending
+      const payload = { ...form };
+      const toISO = (dt) => {
+        if (!dt) return null;
+        const parts = dt.split('T');
+        if (parts.length !== 2) return new Date(dt).toISOString();
+        const [date, time] = parts;
+        const [y, m, d] = date.split('-').map(Number);
+        const [hh, mm] = time.split(':').map(Number);
+        return new Date(y, m - 1, d, hh || 0, mm || 0).toISOString();
+      };
+      payload.open_time = toISO(form.open_time);
+      payload.close_time = toISO(form.close_time);
+
       if (modal.ticket) {
-        await ticketService.updateTicketClass(authFetch, modal.ticket._id, form);
-        toast.success('Ticket class updated');
+        const res = await eventService.updateTicketClass(authFetch, concertId, modal.ticket._id, payload);
+        const updatedCount = res.data?.updatedSeatCount || 0;
+        toast.success(`Ticket class updated${updatedCount ? ` — updated ${updatedCount} seats` : ''}`);
       } else {
-        await ticketService.createTicketClass(authFetch, form);
+        await eventService.addTicketClass(authFetch, concertId, payload);
         toast.success('Ticket class created');
       }
       setModal({ type: null, ticket: null });
@@ -95,7 +111,7 @@ export default function TicketClassList() {
 
   const handleDelete = async () => {
     try {
-      await ticketService.deleteTicketClass(authFetch, modal.ticket._id);
+      await eventService.deleteTicketClass(authFetch, concertId, modal.ticket._id);
       toast.success('Ticket class deleted');
       setModal({ type: null, ticket: null });
       fetchData();
@@ -137,32 +153,29 @@ export default function TicketClassList() {
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-3 bg-primary/20 rounded-xl"><Ticket size={24} className="text-primary" /></div>
                 <div>
-                  <h3 className="font-semibold text-white">{tc.name}</h3>
-                  <p className="text-sm text-gray-500">{tc.zone?.name || 'No zone'}</p>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-white">{tc.name}</h3>
+                      {(() => {
+                        const now = new Date();
+                        const open = tc.open_time ? new Date(tc.open_time) : null;
+                        const close = tc.close_time ? new Date(tc.close_time) : null;
+                        const onSale = (!open || open <= now) && (!close || close >= now);
+                        return (
+                          <span className={`text-xs px-2 py-0.5 rounded ${onSale ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-200'}`}>
+                            {onSale ? 'On sale' : 'Not on sale'}
+                          </span>
+                        );
+                      })()}
+                    </div>
+                    <p className="text-sm text-gray-500">{/* zone removed from ticket class display */}</p>
                 </div>
               </div>
 
               <div className="text-3xl font-bold text-white mb-4">{formatCurrency(tc.price)}</div>
 
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center justify-between text-gray-400">
-                  <span className="flex items-center gap-2"><Users size={14} /> Quota</span>
-                  <span className="text-white">{tc.sold || 0} / {tc.quota}</span>
-                </div>
-                <div className="w-full h-2 bg-white/10 rounded-full">
-                  <div className="h-full bg-primary rounded-full" style={{ width: `${Math.min(100, ((tc.sold || 0) / tc.quota) * 100)}%` }} />
-                </div>
-              </div>
+              {/* quota display removed from ticket class card */}
 
-              {tc.benefits?.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-white/10">
-                  <p className="text-xs text-gray-500 mb-2">Benefits</p>
-                  <div className="flex flex-wrap gap-1">
-                    {tc.benefits.slice(0, 3).map((b, i) => <Badge key={i} variant="gray" className="text-xs">{b}</Badge>)}
-                    {tc.benefits.length > 3 && <Badge variant="gray" className="text-xs">+{tc.benefits.length - 3}</Badge>}
-                  </div>
-                </div>
-              )}
+              {/* benefits removed */}
             </Card>
           ))}
         </div>
@@ -187,37 +200,19 @@ export default function TicketClassList() {
 
           <div className="grid grid-cols-2 gap-4">
             <Input label="Name *" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="VIP, Regular, etc." />
-            <Select label="Zone" value={form.zone} onChange={e => setForm({ ...form, zone: e.target.value })}
-              options={[{ value: '', label: 'Select zone' }, ...zones.map(z => ({ value: z._id, label: z.name }))]} />
+            <Input label="Price *" type="number" required value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="Price *" type="number" required value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} />
-            <Input label="Quota *" type="number" required value={form.quota} onChange={e => setForm({ ...form, quota: e.target.value })} />
-          </div>
+          {modal.ticket && (
+            <div className="flex items-center gap-2 text-sm">
+              <input type="checkbox" id="includeLocked" checked={!!form.includeLocked} onChange={e => setForm({ ...form, includeLocked: e.target.checked })} />
+              <label htmlFor="includeLocked" className="text-gray-400">Also update LOCKED seats (not recommended if customers are checking out)</label>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <Input label="Sale Opens" type="datetime-local" value={form.open_time} onChange={e => setForm({ ...form, open_time: e.target.value })} />
             <Input label="Sale Closes" type="datetime-local" value={form.close_time} onChange={e => setForm({ ...form, close_time: e.target.value })} />
-          </div>
-
-          <Textarea label="Description" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={2} />
-
-          {/* Benefits */}
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">Benefits</label>
-            <div className="flex gap-2 mb-2">
-              <Input value={newBenefit} onChange={e => setNewBenefit(e.target.value)} placeholder="Add benefit..." className="flex-1"
-                onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addBenefit())} />
-              <Button type="button" variant="outline" onClick={addBenefit}>Add</Button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {form.benefits?.map((b, i) => (
-                <span key={i} className="flex items-center gap-1 px-2 py-1 bg-white/5 rounded-lg text-sm text-gray-300">
-                  {b} <button type="button" onClick={() => removeBenefit(i)} className="text-gray-500 hover:text-red-400">×</button>
-                </span>
-              ))}
-            </div>
           </div>
 
           <div className="flex gap-3 pt-4">

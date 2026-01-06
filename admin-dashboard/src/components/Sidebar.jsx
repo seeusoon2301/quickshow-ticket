@@ -62,6 +62,12 @@ const Sidebar = ({ isOpen, onToggle }) => {
             { label: 'Categories', path: '/events/categories' },
           ],
         },
+          {
+            id: 'tickets',
+            label: 'Ticket Classes',
+            icon: Ticket,
+            path: '/tickets',
+          },
         {
           id: 'venues',
           label: 'Venues',
