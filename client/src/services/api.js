@@ -15,8 +15,8 @@ const fetchAPI = async (endpoint, options = {}) => {
     },
   };
 
-  // Add auth token if available
-  const token = localStorage.getItem("token");
+  // Add auth token if available (support backend_token from AuthContext and legacy 'token')
+  const token = localStorage.getItem("backend_token") || localStorage.getItem("token");
   if (token) {
     defaultOptions.headers["Authorization"] = `Bearer ${token}`;
   }

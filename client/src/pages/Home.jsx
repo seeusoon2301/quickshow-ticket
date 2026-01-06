@@ -70,7 +70,7 @@ const Home = () => {
 
       {/* Category Bar - Fixed position below navbar */}
       <div className="sticky top-16 z-40 bg-[#1a1a1a] shadow-lg">
-        <div className="container mx-auto px-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <CategoryBar
             selectedCategory={selectedCategory}
             onCategoryChange={handleCategoryChange}

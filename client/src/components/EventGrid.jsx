@@ -176,7 +176,7 @@ const EventGrid = ({ filters = {}, selectedCategory = "" }) => {
       {/* Events Grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
         {visibleEvents.map((event) => {
-          const eventDate = event.shows?.[0]?.date || event.date;
+          const eventDate = event.start_time || event.shows?.[0]?.date || event.date;
           const lowestPrice = getLowestPrice(event);
           
           return (
@@ -241,7 +241,7 @@ const EventGrid = ({ filters = {}, selectedCategory = "" }) => {
               {/* Event Info */}
               <div className="mt-3">
                 <h3 className="font-semibold text-white group-hover:text-primary transition line-clamp-2">
-                  {event.name}
+                  {event.title || event.name}
                 </h3>
                 <div className="mt-1 flex items-center gap-2 text-gray-400 text-sm">
                   <Calendar size={14} />

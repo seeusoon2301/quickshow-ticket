@@ -81,11 +81,17 @@ export const CartProvider = ({ children }) => {
         // Update existing item
         const updated = [...prev];
         if (item.seats) {
-          // Add new seats
-          updated[existingIndex].seats = [
-            ...new Set([...(updated[existingIndex].seats || []), ...item.seats])
-          ];
-          updated[existingIndex].quantity = updated[existingIndex].seats.length;
+          // Merge seats and deduplicate by seat id
+          const existingSeats = updated[existingIndex].seats || [];
+          const merged = [...existingSeats, ...item.seats];
+          const map = {};
+          merged.forEach((s) => {
+            if (!s || !s.id) return;
+            map[String(s.id)] = s;
+          });
+          const uniqueSeats = Object.values(map);
+          updated[existingIndex].seats = uniqueSeats;
+          updated[existingIndex].quantity = uniqueSeats.length;
         } else {
           // Increase quantity
           updated[existingIndex].quantity += item.quantity || 1;
@@ -104,7 +110,7 @@ export const CartProvider = ({ children }) => {
         ticketClassId: item.ticketClassId,
         ticketClassName: item.ticketClassName,
         price: item.price,
-        quantity: item.quantity || 1,
+        quantity: (item.seats && item.seats.length) ? item.seats.length : (item.quantity || 1),
         seats: item.seats || [],
         addedAt: Date.now(),
       }];
@@ -166,12 +172,16 @@ export const CartProvider = ({ children }) => {
    * Get cart totals
    */
   const getCartTotals = useCallback(() => {
-    const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const serviceFee = Math.round(subtotal * 0.05); // 5% service fee
-    const total = subtotal + serviceFee;
-    const itemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+    const subtotal = cartItems.reduce((sum, item) => {
+      if (item.seats && item.seats.length > 0) {
+        return sum + item.seats.reduce((ss, s) => ss + (s.price || item.price || 0), 0);
+      }
+      return sum + ((item.price || 0) * (item.quantity || 0));
+    }, 0);
+    const total = subtotal;
+    const itemCount = cartItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
 
-    return { subtotal, serviceFee, total, itemCount };
+    return { subtotal, total, itemCount };
   }, [cartItems]);
 
   /**

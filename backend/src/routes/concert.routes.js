@@ -32,7 +32,7 @@ const router = Router();
 router.get('/', optionalAuth, getConcerts);
 router.get('/featured', getFeaturedConcerts);
 router.get('/:id', optionalAuth, getConcertById);
-router.get('/:id/seats', getConcertSeats);
+router.get('/:id/seats', optionalAuth, getConcertSeats);
 
 // Organizer routes
 router.get('/organizer/my-concerts', authenticate, authorize('ORG', 'ADMIN'), getMyConcerts);

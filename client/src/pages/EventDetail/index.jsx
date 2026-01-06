@@ -24,6 +24,9 @@ import ArtistsSection from "./components/ArtistsSection";
 import OrganizerSection from "./components/OrganizerSection";
 import RecommendedEvents from "./components/RecommendedEvents";
 import SeatSelection from "../../components/SeatSelection";
+import api from "../../services/api";
+import RestorePurchaseModal from '../../components/RestorePurchaseModal';
+import { useCart } from '../../context/CartContext.jsx';
 
 const API_BASE = "http://localhost:5000/api";
 
@@ -39,6 +42,11 @@ const EventDetail = () => {
   const [showSeatSelection, setShowSeatSelection] = useState(false);
   const [selectedShow, setSelectedShow] = useState(null);
   const [selectedTicketClass, setSelectedTicketClass] = useState(null);
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  const [restoreEventTitle, setRestoreEventTitle] = useState('');
+  const { cartItems, removeFromCart } = useCart();
+  // Category state (CategoryBar behavior retained)
+  const [selectedCategory, setSelectedCategory] = useState("");
 
   // Refs for section scrolling
   const introRef = useRef(null);
@@ -82,9 +90,46 @@ const EventDetail = () => {
     };
 
     fetchEvent();
+    // no filter bar on this page; keep CategoryBar only
+
     // Scroll to top on load
     window.scrollTo(0, 0);
   }, [id]);
+
+  // On mount, check for saved purchase progress and show restore modal when applicable
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('purchase_progress');
+      if (!raw) return;
+      const progress = JSON.parse(raw);
+      if (!progress) return;
+      // Only offer restore when the progress was in the fill or payment step (not during order selection)
+      if (String(progress.eventId) === String(id) && (progress.step === 'fill' || progress.step === 'payment')) {
+        setRestoreEventTitle(progress.eventTitle || 'Sự kiện của bạn');
+        setRestoreOpen(true);
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, [id]);
+
+  const handleRepurchase = () => {
+    // Clear any cart items for this event and start fresh
+    try {
+      (cartItems || []).forEach((it) => {
+        if (String(it.eventId) === String(id)) removeFromCart(it.id);
+      });
+    } catch (e) {}
+    sessionStorage.removeItem('purchase_progress');
+    setRestoreOpen(false);
+    navigate(`/order/${id}`);
+  };
+
+  const handleContinuePurchase = () => {
+    // Continue where left off: navigate to order page and keep purchase_progress so seats/cart remain restored
+    setRestoreOpen(false);
+    navigate(`/order/${id}`);
+  };
 
   const handleBuyTicket = (ticketClass, showTime) => {
     if (!isSignedIn) {
@@ -94,32 +139,26 @@ const EventDetail = () => {
 
     setSelectedTicketClass(ticketClass);
     setSelectedShow(showTime);
-
-    // If event has seats, show seat selection
-    if (event.hasSeats || event.ticket_classes?.some(t => t.hasSeats)) {
-      setShowSeatSelection(true);
-      return;
-    }
-
-    // Otherwise go to checkout
-    navigate("/checkout", {
+    
+    // Navigate to order page where user can view seat chart and choose seats
+    navigate(`/order/${event._id}`, {
       state: {
         event,
         ticketClass,
-        quantity: 1,
-        selectedSeats: null,
+        showTime,
       },
     });
   };
 
   const handleSeatSelect = (selectedSeats) => {
     setShowSeatSelection(false);
-    navigate("/checkout", {
+    navigate("/payment", {
       state: {
         event,
         ticketClass: selectedTicketClass,
         quantity: selectedSeats.length,
         selectedSeats,
+        subtotal: selectedSeats.reduce((s, seat) => s + (seat.price || seat.ticketClass?.price || 0), 0),
       },
     });
   };
@@ -134,13 +173,30 @@ const EventDetail = () => {
     refs[section]?.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  const handleCategoryChange = (slug) => {
-    if (slug) {
-      navigate(`/category/${slug}`);
-    } else {
-      navigate('/');
-    }
+  // CategoryBar handlers for event detail page: mirror Home behavior
+  const handleCategorySelect = (categorySlug) => {
+    if (categorySlug) navigate(`/category/${categorySlug}`);
   };
+
+  const handleHomeClick = () => {
+    navigate(`/`);
+  };
+
+  // Fetch related events by category when user selects one
+  useEffect(() => {
+    if (!selectedCategory) return;
+    const fetchByCategory = async () => {
+      try {
+        const res = await api.event.getByCategory(selectedCategory);
+        const list = res.data?.concerts || res.concerts || res.data || res;
+        const filtered = (Array.isArray(list) ? list : []).filter((e) => e._id !== id);
+        setRecommended(filtered.slice(0, 8));
+      } catch (err) {
+        console.error("Error fetching events by category:", err);
+      }
+    };
+    fetchByCategory();
+  }, [selectedCategory, id]);
 
   if (loading) {
     return (
@@ -167,17 +223,24 @@ const EventDetail = () => {
     <div className="min-h-screen bg-[#1a1a1a]">
       {/* Category Bar */}
       <div className="sticky top-16 z-40 bg-[#1a1a1a] border-b border-white/10">
-        <div className="px-6 md:px-16 lg:px-24">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <CategoryBar
-            selectedCategory={null}
-            onCategoryChange={handleCategoryChange}
-            onHomeClick={() => navigate('/')}
+            selectedCategory={selectedCategory}
+            onCategoryChange={handleCategorySelect}
+            onHomeClick={handleHomeClick}
           />
         </div>
       </div>
 
       {/* Event Info Header with Blurred Background */}
       <EventInfoHeader event={event} onBuyClick={handleBuyTicket} />
+
+      <RestorePurchaseModal
+        open={restoreOpen}
+        eventTitle={restoreEventTitle || event?.title || event?.name}
+        onRepurchase={handleRepurchase}
+        onContinue={handleContinuePurchase}
+      />
 
       {/* Content Navigation Bar */}
       <ContentNavbar onNavigate={scrollToSection} />
@@ -205,8 +268,16 @@ const EventDetail = () => {
         <OrganizerSection organizer={event.organizer} />
       </div>
 
-      {/* Recommended Events */}
-      <RecommendedEvents events={recommended} />
+      {/* Recommended Events (filtered by selected category / filters) */}
+      <RecommendedEvents
+        events={recommended.filter((ev) => {
+          if (!selectedCategory) return true;
+          const catMatch = (ev.categories && ev.categories.includes(selectedCategory))
+            || (ev.category && ev.category.slug === selectedCategory)
+            || (ev.category === selectedCategory);
+          return !!catMatch;
+        })}
+      />
 
       {/* Seat Selection Modal */}
       {showSeatSelection && (

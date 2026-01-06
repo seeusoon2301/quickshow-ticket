@@ -5,7 +5,6 @@
 
 import React from "react";
 import { Calendar, Clock, MapPin, ExternalLink } from "lucide-react";
-import { Facebook, Link2 } from "lucide-react";
 
 const formatDate = (dateString) => {
   if (!dateString) return '';
@@ -62,23 +61,7 @@ const EventInfoHeader = ({ event, onBuyClick }) => {
     return `https://www.google.com/maps/search/?api=1&query=${query}`;
   };
 
-  const handleShare = async () => {
-    try {
-      await navigator.share({
-        title: event.title,
-        text: `Check out this event: ${event.title}`,
-        url: window.location.href,
-      });
-    } catch (err) {
-      navigator.clipboard.writeText(window.location.href);
-      alert("Link đã được sao chép!");
-    }
-  };
-
-  const handleFacebookShare = () => {
-    const url = encodeURIComponent(window.location.href);
-    window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, '_blank');
-  };
+  // share handlers removed — replaced by direct Buy CTA below
 
   return (
     <div className="relative">
@@ -105,19 +88,6 @@ const EventInfoHeader = ({ event, onBuyClick }) => {
               {/* Overlay on hover */}
               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl" />
             </div>
-            
-            {/* Buy Button (Mobile & Desktop) */}
-            <button
-              onClick={() => onBuyClick(event.ticket_classes?.[0])}
-              disabled={event.status !== 'PUB'}
-              className={`w-full mt-4 py-4 rounded-xl font-bold text-lg transition ${
-                event.status === 'PUB'
-                  ? 'bg-primary hover:bg-primary/90 text-black'
-                  : 'bg-gray-600 cursor-not-allowed text-gray-300'
-              }`}
-            >
-              Mua vé ngay
-            </button>
           </div>
 
           {/* Event Info */}
@@ -182,21 +152,16 @@ const EventInfoHeader = ({ event, onBuyClick }) => {
               </div>
             </div>
 
-            {/* Social Share */}
-            <div className="flex items-center gap-3 mt-6">
+            {/* Buy CTA (replaces social share buttons) */}
+            <div className="mt-6">
               <button
-                onClick={handleFacebookShare}
-                className="p-3 bg-blue-600 hover:bg-blue-700 rounded-full transition"
-                title="Chia sẻ Facebook"
+                onClick={() => onBuyClick(event.ticket_classes?.[0])}
+                disabled={event.status !== 'PUB'}
+                className={`px-20 py-5 rounded-full font-semibold transition ${
+                  event.status === 'PUB' ? 'bg-primary text-black hover:bg-primary/90' : 'bg-gray-600 text-gray-300 cursor-not-allowed'
+                }`}
               >
-                <Facebook className="w-5 h-5 text-white" />
-              </button>
-              <button
-                onClick={handleShare}
-                className="p-3 bg-gray-600 hover:bg-gray-500 rounded-full transition"
-                title="Sao chép link"
-              >
-                <Link2 className="w-5 h-5 text-white" />
+                Mua vé ngay
               </button>
             </div>
           </div>

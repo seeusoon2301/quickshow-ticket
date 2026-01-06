@@ -83,45 +83,7 @@ const HeroBanner = () => {
               
               {/* Gradient Overlay */}
               <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/50 to-transparent" />
-              
-              {/* Content */}
-              <div className="absolute inset-0 flex items-center">
-                <div className="max-w-xl px-6 md:px-12">
-                  {/* Category Badge */}
-                  {event.category && (
-                    <span 
-                      className="inline-block px-3 py-1 rounded-full text-xs font-semibold mb-3"
-                      style={{ backgroundColor: event.category.color || "#F84565" }}
-                    >
-                      {event.category.name}
-                    </span>
-                  )}
-                  
-                  {/* Title */}
-                  <h2 className="text-2xl md:text-4xl font-bold text-white mb-3 line-clamp-2">
-                    {event.title}
-                  </h2>
-                  
-                  {/* Info */}
-                  <div className="flex flex-wrap gap-4 text-gray-300 text-sm mb-4">
-                    <span className="flex items-center gap-1.5">
-                      <Calendar size={16} />
-                      {formatDate(event.start_time)}
-                    </span>
-                    {event.venue && (
-                      <span className="flex items-center gap-1.5">
-                        <MapPin size={16} />
-                        {event.venue.name}
-                      </span>
-                    )}
-                  </div>
-                  
-                  {/* CTA Button */}
-                  <button className="px-6 py-2.5 bg-primary hover:bg-primary/90 rounded-full font-semibold text-white transition-all hover:scale-105">
-                    Đặt vé ngay
-                  </button>
-                </div>
-              </div>
+            
             </div>
           </SwiperSlide>
         ))}

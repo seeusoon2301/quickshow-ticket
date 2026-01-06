@@ -8,6 +8,7 @@ import { assets } from "../assets/assets";
 import { SearchIcon, ShoppingCart, Menu, X, Ticket, History } from "lucide-react";
 import { useClerk, UserButton, useUser } from "@clerk/clerk-react";
 import { useCart } from "../context/CartContext";
+import ShoppingCartDropdown from './ShoppingCartDropdown';
 
 const API_BASE = "http://localhost:5000/api";
 
@@ -16,6 +17,7 @@ const Navbar = () => {
   const { user } = useUser();
   const { openSignIn } = useClerk();
   const { itemCount, isExpiringSoon } = useCart();
+  const [isCartOpen, setIsCartOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
@@ -69,9 +71,13 @@ const Navbar = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link to="/" className="flex-shrink-0">
-            <img src={assets.logo} alt="QuickShow" className="h-10 w-auto" />
-          </Link>
+          <button
+            onClick={() => { navigate('/'); window.scrollTo(0, 0); }}
+            className="flex-shrink-0 bg-transparent border-0 p-0"
+            aria-label="Go to homepage"
+          >
+            <img src={assets.logo} alt="QuickShow" className="h-10 w-auto cursor-pointer" />
+          </button>
 
           {/* Search Bar - Desktop */}
           <div className="hidden md:flex flex-1 max-w-xl mx-8" ref={searchRef}>
@@ -133,19 +139,29 @@ const Navbar = () => {
             </button>
 
             {/* Cart */}
-            <button
-              onClick={() => navigate("/checkout")}
-              className="relative p-2 text-white hover:text-primary transition"
-            >
-              <ShoppingCart size={22} />
-              {itemCount > 0 && (
-                <span className={`absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center ${
-                  isExpiringSoon() ? 'bg-red-500 animate-pulse' : 'bg-primary'
-                } text-white`}>
-                  {itemCount}
-                </span>
+            <div className="relative">
+              <button
+                onClick={() => setIsCartOpen((s) => !s)}
+                className="relative p-2 text-white hover:text-primary transition"
+                aria-expanded={isCartOpen}
+                aria-label="Open cart"
+              >
+                <ShoppingCart size={22} />
+                {itemCount > 0 && (
+                  <span className={`absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center ${
+                    isExpiringSoon() ? 'bg-red-500 animate-pulse' : 'bg-primary'
+                  } text-white`}>
+                    {itemCount}
+                  </span>
+                )}
+              </button>
+
+              {isCartOpen && (
+                <div className="absolute right-0 mt-2 z-50">
+                  <ShoppingCartDropdown onClose={() => setIsCartOpen(false)} />
+                </div>
               )}
-            </button>
+            </div>
 
             {/* Auth */}
             {!user ? (

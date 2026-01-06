@@ -397,12 +397,16 @@ export const getConcertSeats = async (req, res, next) => {
     // Get show seats (seat assignments)
     const showSeats = await ShowSeat.find({ concert: concert._id })
       .populate('seat')
-      .populate('ticketClass', 'name price color');
+      .populate('ticketClass', 'name price color')
+      .populate('locked_by', '_id');
 
     // Create a map for quick lookup
     const showSeatMap = {};
     showSeats.forEach(ss => {
-      showSeatMap[ss.seat._id.toString()] = ss;
+      // include locked_by id and whether locked by current requester
+      const lockedById = ss.locked_by ? ss.locked_by._id || ss.locked_by : null;
+      const lockedByCurrentUser = req.user ? (lockedById && req.user._id.toString() === lockedById.toString()) : false;
+      showSeatMap[ss.seat._id.toString()] = { ...ss.toObject(), lockedById, lockedByCurrentUser };
     });
 
     // Build seat map with assignment info
@@ -421,6 +425,8 @@ export const getConcertSeats = async (req, res, next) => {
         // Show seat assignment info (if assigned to this concert)
         showSeatId: showSeat?._id,
         status: showSeat?.status || 'UNASSIGNED',
+        lockedById: showSeat?.lockedById || null,
+        lockedByCurrentUser: showSeat?.lockedByCurrentUser || false,
         ticketClass: showSeat?.ticketClass ? {
           _id: showSeat.ticketClass._id,
           name: showSeat.ticketClass.name,
