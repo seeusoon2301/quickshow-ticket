@@ -56,10 +56,20 @@ const Navbar = () => {
     }
   }, [searchTerm]);
 
+  // Sync navbar search input with URL `q` param so the navbar reflects current search
+  useEffect(() => {
+    const q = new URLSearchParams(location.search).get('q') || '';
+    setSearchTerm(q);
+  }, [location.search]);
+
   const handleSearch = (e) => {
-    if (e.key === "Enter" && searchTerm.trim()) {
-      navigate(`/search?q=${encodeURIComponent(searchTerm.trim())}`);
-      setSearchTerm("");
+    if (e.key === "Enter") {
+      const q = searchTerm.trim();
+      if (q) {
+        navigate(`/search?q=${encodeURIComponent(q)}`);
+      } else {
+        navigate(`/search`);
+      }
       setIsSearchFocused(false);
     }
   };

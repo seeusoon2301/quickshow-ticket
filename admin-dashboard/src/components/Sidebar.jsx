@@ -78,11 +78,7 @@ const Sidebar = ({ isOpen, onToggle }) => {
           id: 'users',
           label: 'Users',
           icon: Users,
-          children: [
-            { label: 'All Users', path: '/users' },
-            { label: 'Organizers', path: '/users/organizers' },
-            { label: 'Staff', path: '/users/staff' },
-          ],
+          path: '/users',
         },
         {
           id: 'orders',
@@ -219,6 +215,7 @@ const Sidebar = ({ isOpen, onToggle }) => {
                 <NavLink
                   key={idx}
                   to={child.path}
+                  end
                   className={({ isActive }) =>
                     `block px-4 py-2.5 rounded-lg text-sm transition-all duration-200 mb-1
                     ${isActive 
@@ -238,6 +235,7 @@ const Sidebar = ({ isOpen, onToggle }) => {
     return (
       <NavLink
         to={item.path}
+        end
         className={({ isActive }) =>
           `flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 mb-1
           ${isActive 

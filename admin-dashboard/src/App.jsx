@@ -44,7 +44,6 @@ import VouchersList from './pages/Vouchers/VouchersList';
 // Staff Pages
 import TicketScanner from './pages/Staff/TicketScanner';
 import CheckInList from './pages/Staff/CheckInList';
-import StaffList from './pages/Staff/StaffList';
 
 // Reports
 import SalesReport from './pages/Reports/SalesReport';
@@ -188,16 +187,7 @@ function AppRoutes() {
             <UsersList />
           </ProtectedRoute>
         } />
-        <Route path="users/organizers" element={
-          <ProtectedRoute allowedRoles={['ADMIN']}>
-            <UsersList filterRole="ORG" />
-          </ProtectedRoute>
-        } />
-        <Route path="users/staff" element={
-          <ProtectedRoute allowedRoles={['ADMIN']}>
-            <StaffList />
-          </ProtectedRoute>
-        } />
+          {/* Organizer and Staff specific management removed - consolidated under All Users */}
 
         {/* Orders - Admin & Organizer */}
         <Route path="orders" element={

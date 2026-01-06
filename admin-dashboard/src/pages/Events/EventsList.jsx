@@ -146,7 +146,10 @@ const EventRow = ({ event, getStatusBadge, showMenu, setShowMenu, onDelete, navi
       <td className="px-5 py-4">
         <div className="flex items-center gap-3">
           <img src={event.thumbnail || 'https://via.placeholder.com/50'} alt="" className="w-12 h-12 rounded-lg object-cover" />
-          <div><p className="font-medium text-white">{event.title}</p><p className="text-xs text-gray-500">{event.category}</p></div>
+          <div>
+            <p className="font-medium text-white">{event.title}</p>
+            <p className="text-xs text-gray-500">{event.category?.name || event.category}</p>
+          </div>
         </div>
       </td>
       <td className="px-5 py-4 text-gray-400">{formatDate(event.start_time)}</td>

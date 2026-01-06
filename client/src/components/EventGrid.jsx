@@ -12,38 +12,65 @@ const EVENTS_PER_ROW = 4;
 const INITIAL_ROWS = 4;
 const ROWS_TO_LOAD = 4;
 
-const EventGrid = ({ filters = {}, selectedCategory = "" }) => {
+const EventGrid = ({ filters = {}, selectedCategory = "", search = "" }) => {
   const [allEvents, setAllEvents] = useState([]);
   const [visibleRows, setVisibleRows] = useState(INITIAL_ROWS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fetch all events
+  // Fetch events from API, re-run when filters/search/selectedCategory change
   useEffect(() => {
     const fetchEvents = async () => {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`${API_BASE}/concerts`);
+        const params = new URLSearchParams();
+        // Request more items so client has enough to filter/paginate
+        params.set('limit', '1000');
+
+        if (search && search.trim()) params.set('search', search.trim());
+
+        // category param: prefer explicit multi-select from filters, otherwise selectedCategory
+        const catParam = (filters.categories && filters.categories.length > 0)
+          ? filters.categories.join(',')
+          : selectedCategory;
+        if (catParam) params.set('category', catParam);
+
+        if (filters.city) params.set('city', filters.city);
+        if (filters.startDate) params.set('startDate', filters.startDate);
+        if (filters.endDate) params.set('endDate', filters.endDate);
+
+        const url = `${API_BASE}/concerts?${params.toString()}`;
+        const res = await fetch(url);
         const data = await res.json();
         const events = data.data?.concerts || [];
-        
+
         // Shuffle events for random display
         const shuffled = [...events].sort(() => Math.random() - 0.5);
         setAllEvents(shuffled);
       } catch (err) {
-        console.error("Error fetching events:", err);
-        setError("Không thể tải sự kiện");
+        console.error('Error fetching events:', err);
+        setError('Không thể tải sự kiện');
       } finally {
         setLoading(false);
       }
     };
     fetchEvents();
-  }, []);
+  }, [filters, selectedCategory, search]);
 
   // Filter events based on current filters
   const filteredEvents = useMemo(() => {
     let events = [...allEvents];
+
+    // Text search filter
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      events = events.filter((e) => {
+        const title = (e.title || e.name || '').toLowerCase();
+        const desc = (e.description || '').toLowerCase();
+        return title.includes(q) || desc.includes(q);
+      });
+    }
 
     // Filter by selected category from CategoryBar
     if (selectedCategory) {
@@ -65,26 +92,60 @@ const EventGrid = ({ filters = {}, selectedCategory = "" }) => {
       events = events.filter((e) => e.venue?.city === filters.city);
     }
 
-    // Filter by date range
+    // Date filtering: normalize to local date-only (avoid timezone parsing differences)
+    const parseInputDate = (dateStr) => {
+      if (!dateStr) return null;
+      // Expecting YYYY-MM-DD from <input type="date">
+      const parts = String(dateStr).split('-').map(Number);
+      if (parts.length !== 3) return null;
+      const [y, m, d] = parts;
+      return new Date(y, m - 1, d);
+    };
+
+    const toDateOnlyMs = (dt) => {
+      if (!dt) return null;
+      const d = new Date(dt);
+      if (isNaN(d)) return null;
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    };
+
+    const getEventDatesMs = (ev) => {
+      const ms = [];
+      if (Array.isArray(ev.performances) && ev.performances.length) {
+        ev.performances.forEach(p => { if (p?.date) ms.push(toDateOnlyMs(p.date)); });
+      }
+      if (ev.start_time) ms.push(toDateOnlyMs(ev.start_time));
+      if (Array.isArray(ev.shows) && ev.shows.length) {
+        ev.shows.forEach(s => { if (s?.date) ms.push(toDateOnlyMs(s.date)); });
+      }
+      if (ev.date) ms.push(toDateOnlyMs(ev.date));
+      return ms.filter(Boolean);
+    };
+
     if (filters.startDate) {
-      const start = new Date(filters.startDate);
-      events = events.filter((e) => {
-        const eventDate = e.shows?.[0]?.date ? new Date(e.shows[0].date) : new Date(e.date);
-        return eventDate >= start;
-      });
+      const startDt = parseInputDate(filters.startDate);
+      const startMs = startDt ? toDateOnlyMs(startDt) : null;
+      if (startMs !== null) {
+        events = events.filter((e) => {
+          const dates = getEventDatesMs(e);
+          return dates.some(dMs => dMs >= startMs);
+        });
+      }
     }
 
     if (filters.endDate) {
-      const end = new Date(filters.endDate);
-      end.setHours(23, 59, 59, 999);
-      events = events.filter((e) => {
-        const eventDate = e.shows?.[0]?.date ? new Date(e.shows[0].date) : new Date(e.date);
-        return eventDate <= end;
-      });
+      const endDt = parseInputDate(filters.endDate);
+      const endMs = endDt ? toDateOnlyMs(endDt) : null;
+      if (endMs !== null) {
+        events = events.filter((e) => {
+          const dates = getEventDatesMs(e);
+          return dates.some(dMs => dMs <= endMs);
+        });
+      }
     }
 
     return events;
-  }, [allEvents, selectedCategory, filters]);
+  }, [allEvents, selectedCategory, filters, search]);
 
   // Calculate visible events based on current rows
   const visibleEvents = useMemo(() => {
@@ -103,7 +164,7 @@ const EventGrid = ({ filters = {}, selectedCategory = "" }) => {
   // Reset visible rows when filters change
   useEffect(() => {
     setVisibleRows(INITIAL_ROWS);
-  }, [selectedCategory, filters]);
+  }, [selectedCategory, filters, search]);
 
   // Format date
   const formatDate = (dateStr) => {

@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { Search as SearchIcon, Filter, Calendar, MapPin, X } from "lucide-react";
+import CategoryBar from "../components/CategoryBar";
+import FilterBar from "../components/FilterBar";
+import EventGrid from "../components/EventGrid";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -23,11 +26,36 @@ const Search = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
     category: '',
+    categories: [],
+    city: '',
     startDate: '',
+    endDate: '',
     sortBy: 'start_time'
   });
 
   const query = new URLSearchParams(useLocation().search).get("q") || "";
+
+  const [searchTerm, setSearchTerm] = useState(query);
+
+  // keep searchTerm in sync when URL query changes externally
+  useEffect(() => {
+    setSearchTerm(query);
+  }, [query]);
+
+  // If user clears the navbar search (no q param), reset filters so Search shows all events
+  useEffect(() => {
+    if (query === "") {
+      setFilters({
+        category: '',
+        categories: [],
+        city: '',
+        startDate: '',
+        endDate: '',
+        sortBy: 'start_time'
+      });
+      setShowFilters(false);
+    }
+  }, [query]);
 
   // Fetch categories on mount
   useEffect(() => {
@@ -40,174 +68,86 @@ const Search = () => {
       .catch((err) => console.error("Failed to fetch categories:", err));
   }, []);
 
+  // Fetch venues to populate city list
+  const [cities, setCities] = useState([]);
   useEffect(() => {
-    if (!query.trim()) {
-      setResults([]);
-      return;
-    }
-
-    setLoading(true);
-    
-    // Build query params
-    const params = new URLSearchParams({
-      search: query,
-      ...(filters.category && { category: filters.category }),
-      ...(filters.startDate && { startDate: filters.startDate }),
-      sortBy: filters.sortBy
-    });
-
-    fetch(`${API_URL}/concerts?${params}`)
+    fetch(`${API_URL}/venues?limit=100`)
       .then((res) => res.json())
       .then((response) => {
-        const concerts = response.data?.concerts || response.data || response.concerts || [];
-        setResults(Array.isArray(concerts) ? concerts : []);
-        setLoading(false);
+        const venues = response.data?.venues || [];
+        const uniqueCities = Array.from(new Set(venues.map(v => v.city).filter(Boolean)));
+        setCities(uniqueCities);
       })
-      .catch(() => {
-        setResults([]);
-        setLoading(false);
-      });
-  }, [query, filters]);
+      .catch((err) => console.error('Failed to fetch venues for cities:', err));
+  }, []);
+
+  // EventGrid will handle fetching + client-side filtering; no manual fetch here
 
   const getCategoryLabel = (slug) => {
-    const cat = categories.find(c => c.slug === filters.category);
+    const cat = categories.find(c => c.slug === slug || c._id === slug);
     return cat?.name || 'Tất cả';
   };
 
   return (
     <div className="px-6 md:px-16 lg:px-24 py-8 min-h-screen">
-      <div className="mt-24 mb-8">
-        <h2 className="text-2xl font-bold text-white mb-6">
-          {query ? `Results for "${query}"` : 'Search Events'}
-        </h2>
+      <div className="mb-8">
+        {/* Sticky CategoryBar like Home */}
+        <div className="sticky top-16 z-40 bg-[#1a1a1a]">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <CategoryBar
+              selectedCategory={filters.category}
+              onCategoryChange={(cat) => {
+                setFilters(f => ({...f, category: cat || '', categories: cat ? [cat] : []}));
+                setShowFilters(Boolean(cat));
+              }}
+              onHomeClick={() => { setFilters(f => ({...f, category: '', categories: []})); setShowFilters(false); }}
+              showFilters={showFilters}
+            />
+          </div>
+        </div>
 
-        {/* Filters */}
-        <div className="flex flex-wrap gap-4 mb-6">
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition ${
-              showFilters ? 'border-primary bg-primary/10 text-primary' : 'border-gray-700 text-gray-400 hover:border-gray-500'
-            }`}
-          >
-            <Filter size={18} />
-            Filters
-          </button>
-          
-          {filters.category && (
-            <span className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 text-gray-300">
-              {getCategoryLabel(filters.category)}
-              <X size={16} className="cursor-pointer hover:text-primary" onClick={() => setFilters(f => ({...f, category: ''}))} />
-            </span>
-          )}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+
+          <div className="flex items-center gap-4 mb-6">
+            <div className="flex-1 min-w-0" />
+
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition ${
+                  showFilters ? 'border-primary bg-primary/10 text-primary' : 'border-gray-700 text-gray-400 hover:border-gray-500'
+                }`}
+              >
+                <Filter size={18} />
+                Filters
+              </button>
+
+              {filters.categories && filters.categories.length > 0 && (
+                <span className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 text-gray-300">
+                  {filters.categories.map(slug => (getCategoryLabel(slug))).join(', ')}
+                  <X size={16} className="cursor-pointer hover:text-primary" onClick={() => setFilters(f => ({...f, category: '', categories: []}))} />
+                </span>
+              )}
+            </div>
+          </div>
         </div>
 
         {showFilters && (
-          <div className="bg-[rgb(37,36,36)] rounded-xl p-4 mb-6 flex flex-wrap gap-4">
-            <select
-              value={filters.category}
-              onChange={(e) => setFilters(f => ({...f, category: e.target.value}))}
-              className="px-4 py-2 rounded-lg bg-gray-800 text-white border border-gray-700 focus:border-primary focus:outline-none"
-            >
-              <option value="">Tất cả danh mục</option>
-              {categories.map(cat => (
-                <option key={cat._id} value={cat.slug}>{cat.name}</option>
-              ))}
-            </select>
-
-            <input
-              type="date"
-              value={filters.startDate}
-              onChange={(e) => setFilters(f => ({...f, startDate: e.target.value}))}
-              className="px-4 py-2 rounded-lg bg-gray-800 text-white border border-gray-700 focus:border-primary focus:outline-none"
-            />
-
-            <select
-              value={filters.sortBy}
-              onChange={(e) => setFilters(f => ({...f, sortBy: e.target.value}))}
-              className="px-4 py-2 rounded-lg bg-gray-800 text-white border border-gray-700 focus:border-primary focus:outline-none"
-            >
-              <option value="start_time">Date (Soonest)</option>
-              <option value="-start_time">Date (Latest)</option>
-              <option value="base_price">Price (Low to High)</option>
-              <option value="-base_price">Price (High to Low)</option>
-            </select>
-          </div>
+          <FilterBar
+            filters={filters}
+            onFilterChange={(newFilters) => setFilters(f => ({...f, ...newFilters}))}
+            onClose={() => setShowFilters(false)}
+            categories={categories}
+          />
         )}
       </div>
 
-      {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-          {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-            <div
-              key={i}
-              className="bg-gray-800 rounded-xl overflow-hidden shadow-md animate-pulse"
-            >
-              <div className="w-full h-44 bg-gray-700"></div>
-              <div className="p-4 space-y-3">
-                <div className="h-4 bg-gray-700 rounded w-3/4"></div>
-                <div className="h-3 bg-gray-700 rounded w-1/2"></div>
-                <div className="h-4 bg-gray-700 rounded w-1/3 mt-3"></div>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : results.length === 0 ? (
-        <div className="text-center py-16">
-          <SearchIcon className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold text-gray-400">No events found</h3>
-          <p className="text-gray-500 mt-2">
-            {query ? `No results for "${query}"` : 'Enter a search term to find events'}
-          </p>
-        </div>
-      ) : (
-        <>
-          <p className="text-gray-400 mb-4">{results.length} events found</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {results.map((ev) => (
-              <Link
-                key={ev._id}
-                to={`/event/${ev._id}`}
-                className="bg-gray-900 rounded-xl shadow-md overflow-hidden hover:ring-2 hover:ring-primary transition-all group"
-              >
-                <div className="relative overflow-hidden">
-                  <img
-                    src={ev.thumbnail || 'https://via.placeholder.com/400x300'}
-                    alt={ev.title}
-                    className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                  {ev.category && (
-                    <span className="absolute top-2 left-2 px-2 py-1 bg-black/60 backdrop-blur-sm rounded text-xs text-white">
-                      {ev.category}
-                    </span>
-                  )}
-                </div>
-
-                <div className="p-4">
-                  <h3 className="text-lg font-bold text-white line-clamp-2 mb-2 group-hover:text-primary transition">
-                    {ev.title}
-                  </h3>
-                  
-                  <div className="flex items-center gap-2 text-gray-400 text-sm mb-2">
-                    <Calendar size={14} />
-                    <span>{formatDate(ev.start_time)}</span>
-                  </div>
-                  
-                  {ev.venue && (
-                    <div className="flex items-center gap-2 text-gray-400 text-sm mb-3">
-                      <MapPin size={14} />
-                      <span className="truncate">{ev.venue.name || ev.venue}</span>
-                    </div>
-                  )}
-
-                  <p className="text-primary font-bold">
-                    {ev.base_price ? `${formatPrice(ev.base_price)}đ` : 'TBA'}
-                  </p>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </>
-      )}
+      {/* Use shared EventGrid which applies the same client-side filters as Home */}
+      <EventGrid
+        filters={filters}
+        selectedCategory={filters.category}
+        search={query}
+      />
     </div>
   );
 };

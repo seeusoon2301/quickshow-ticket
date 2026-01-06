@@ -15,7 +15,7 @@ import { PageLoader, EmptyState, SearchInput, Select, Button, Card, StatCard, Ba
 // API Service
 import * as userService from '../../services/userService';
 
-const UsersList = () => {
+const UsersList = ({ filterRole = '' }) => {
   const { authFetch } = useAuth();
   
   // Data state
@@ -25,7 +25,13 @@ const UsersList = () => {
   const [pagination, setPagination] = useState({ page: 1, total: 0, pages: 1 });
   
   // Filter state
-  const [filters, setFilters] = useState({ search: '', role: '', status: '' });
+  const [filters, setFilters] = useState({ search: '', role: filterRole || '', status: '' });
+
+  // Keep filters.role in sync when route prop changes (e.g. /users vs /users/organizers)
+  useEffect(() => {
+    setFilters((f) => ({ ...f, role: filterRole || '' }));
+    setPagination((p) => ({ ...p, page: 1 }));
+  }, [filterRole]);
   
   // Modal state
   const [modal, setModal] = useState({ type: null, user: null });
@@ -156,8 +162,8 @@ const UsersList = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">User Management</h1>
-          <p className="text-gray-400">Manage all users in the system</p>
+          <h1 className="text-2xl font-bold text-white">{filterRole === 'ORG' ? 'Organizers' : filterRole === 'STAFF' ? 'Staff' : 'User Management'}</h1>
+          <p className="text-gray-400">{filterRole === 'ORG' ? 'Manage event organizers' : filterRole === 'STAFF' ? 'Manage staff accounts' : 'Manage all users in the system'}</p>
         </div>
         <div className="flex gap-3">
           <Button variant="ghost" onClick={fetchData}><RefreshCw size={20} /></Button>

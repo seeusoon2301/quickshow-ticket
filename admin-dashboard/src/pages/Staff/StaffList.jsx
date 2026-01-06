@@ -10,7 +10,7 @@ import { PageLoader, EmptyState, SearchInput, Button, Card, Badge, Modal, Input,
 import * as staffService from '../../services/staffService';
 
 export default function StaffList() {
-  const { authFetch } = useAuth();
+  const { authFetch, API_URL } = useAuth();
   const [staff, setStaff] = useState([]);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -25,12 +25,12 @@ export default function StaffList() {
       setLoading(true);
       const [staffRes, eventsRes] = await Promise.all([
         staffService.getStaffList(authFetch, { search }),
-        authFetch('/api/concerts?status=PUB&limit=50')
+        authFetch(`${API_URL}/concerts?status=PUB&limit=50`)
       ]);
-      
+
       setStaff(staffRes.data.users || []);
       const eventsData = await eventsRes.json();
-      if (eventsData.success) setEvents(eventsData.data.concerts || []);
+      if (eventsData?.success) setEvents(eventsData.data?.concerts || []);
     } catch (error) {
       toast.error('Failed to load data');
     } finally {

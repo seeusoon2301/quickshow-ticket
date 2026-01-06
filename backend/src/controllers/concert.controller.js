@@ -23,7 +23,8 @@ import { ApiError } from '../middleware/errorHandler.js';
  */
 export const getConcerts = async (req, res, next) => {
   try {
-    const {
+    const rawQuery = req.query || {};
+    let {
       page = 1,
       limit = 12,
       category,
@@ -33,12 +34,19 @@ export const getConcerts = async (req, res, next) => {
       startDate,
       endDate,
       venue,
+      city,
       artist,
       featured,
       trending,
       sortBy = 'start_time',
       sortOrder = 'asc'
-    } = req.query;
+    } = rawQuery;
+
+    // Support sortBy with leading '-' (e.g. -base_price)
+    if (typeof sortBy === 'string' && sortBy.startsWith('-')) {
+      sortOrder = 'desc';
+      sortBy = sortBy.substring(1);
+    }
 
     const query = {};
 
@@ -57,12 +65,19 @@ export const getConcerts = async (req, res, next) => {
     }
 
     if (category) {
-      if (category.match(/^[0-9a-fA-F]{24}$/)) {
-        query.category = category;
-      } else {
-        const cat = await Category.findOne({ slug: category });
-        if (cat) query.category = cat._id;
+      // allow comma-separated category slugs/ids for multi-select
+      const parts = String(category).split(',').map(p => p.trim()).filter(Boolean);
+      const ids = [];
+      for (const p of parts) {
+        if (p.match(/^[0-9a-fA-F]{24}$/)) {
+          ids.push(p);
+        } else {
+          const cat = await Category.findOne({ slug: p });
+          if (cat) ids.push(cat._id);
+        }
       }
+      if (ids.length === 1) query.category = ids[0];
+      else if (ids.length > 1) query.category = { $in: ids };
     }
 
     if (genre) {
@@ -78,11 +93,26 @@ export const getConcerts = async (req, res, next) => {
 
     if (startDate || endDate) {
       query.start_time = query.start_time || {};
-      if (startDate) query.start_time.$gte = new Date(startDate);
-      if (endDate) query.start_time.$lte = new Date(endDate);
+      if (startDate) {
+        const sd = new Date(startDate);
+        sd.setHours(0,0,0,0);
+        query.start_time.$gte = sd;
+      }
+      if (endDate) {
+        const ed = new Date(endDate);
+        ed.setHours(23,59,59,999);
+        query.start_time.$lte = ed;
+      }
     }
 
     if (venue) query.venue = venue;
+    // filter by city (find venues in the city and restrict concerts to those venues)
+    if (city) {
+      const venuesInCity = await Venue.find({ city: { $regex: city, $options: 'i' } }).select('_id');
+      const venueIds = venuesInCity.map(v => v._id);
+      if (venueIds.length > 0) query.venue = { $in: venueIds };
+      else query.venue = null; // no venues -> no concerts
+    }
     if (artist) query.artists = artist;
     if (featured === 'true') query.featured = true;
     if (trending === 'true') query.trending = true;
