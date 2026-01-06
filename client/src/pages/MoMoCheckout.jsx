@@ -1,7 +1,8 @@
 import React from 'react';
-import { CreditCard, ShieldCheck, ChevronRight, Tag } from 'lucide-react';
+import { CreditCard, ShieldCheck, ChevronRight, Tag, Ticket } from 'lucide-react';
 
 const MoMoCheckout = ({ 
+  items, // Thêm prop items để nhận danh sách vé
   subtotal, 
   discountAmount, 
   finalTotal, 
@@ -26,10 +27,29 @@ const MoMoCheckout = ({
           </div>
         </div>
         <h2 className="text-xl font-bold">Thanh toán MoMo</h2>
-        
       </div>
 
       <div className="p-6 space-y-6">
+        {/* --- PHẦN THÔNG TIN VÉ (MỚI THÊM) --- */}
+        <div>
+          <label className="text-xs font-semibold text-gray-500 uppercase mb-3 block tracking-widest">Thông tin vé</label>
+          <div className="space-y-3">
+            {items && items.map((item, idx) => (
+              <div key={idx} className="flex gap-3 bg-gray-800/30 p-3 rounded-2xl border border-gray-700/50">
+                <div className="bg-pink-500/10 p-2 rounded-xl flex items-center justify-center">
+                  <Ticket className="text-pink-500" size={20} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-bold text-white truncate">{item.eventTitle}</div>
+                  <div className="text-[11px] text-gray-400 mt-0.5">
+                    {item.ticketClassName} • {item.seats?.length || item.quantity} vé
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Voucher Section */}
         <div>
           <label className="text-xs font-semibold text-gray-500 uppercase mb-2 block">Mã giảm giá</label>
@@ -83,7 +103,7 @@ const MoMoCheckout = ({
         <div className="flex items-center gap-3 bg-emerald-500/5 p-3 rounded-xl border border-emerald-500/10">
           <ShieldCheck className="text-emerald-500" size={20} />
           <p className="text-[11px] text-gray-400 leading-tight">
-            Thông tin thanh toán của bạn được mã hóa an toàn theo tiêu chuẩn quốc tế PCI DSS.
+            Thông tin thanh toán được mã hóa an toàn theo tiêu chuẩn PCI DSS.
           </p>
         </div>
 
@@ -105,11 +125,6 @@ const MoMoCheckout = ({
             </>
           )}
         </button>
-      </div>
-
-      {/* Footer Branding */}
-      <div className="p-4 bg-gray-800/30 text-center border-t border-gray-800">
-        <p className="text-[10px] text-gray-600 font-medium tracking-widest">POWERED BY MOMO PAYMENT GATEWAY</p>
       </div>
     </div>
   );
