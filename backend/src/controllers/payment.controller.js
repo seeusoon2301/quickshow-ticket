@@ -7,7 +7,7 @@ import ShowSeat from '../models/ShowSeat.js';
 import Ticket from '../models/Ticket.js';
 import { ApiError } from '../middleware/errorHandler.js';
 import config from '../config/index.js';
-
+import axios from 'axios'; 
 /**
  * Payment Controller
  * Handles payment processing with VNPay and MoMo
@@ -61,7 +61,7 @@ export const createPayment = async (req, res, next) => {
       amount: order.total_amount,
       method: paymentMethod,
       status: 'PENDING',
-      transaction_id: `TXN${Date.now()}`
+      trans_id: `TXN${Date.now()}`
     });
     await payment.save();
 
@@ -271,24 +271,67 @@ export const vnpayIPN = async (req, res) => {
  * @desc    Create MoMo payment URL
  */
 async function createMoMoUrl(order, payment) {
-  // MoMo integration placeholder
-  // In production, integrate with MoMo API
-  const partnerCode = process.env.MOMO_PARTNER_CODE;
-  const accessKey = process.env.MOMO_ACCESS_KEY;
-  const secretKey = process.env.MOMO_SECRET_KEY;
-  const requestId = `${order._id}_${Date.now()}`;
-  const orderId = `MOMO_${order._id}`;
-  const orderInfo = `Thanh toan don hang ${order.code}`;
-  const redirectUrl = `${config.clientUrl}/payment/momo/return`;
-  const ipnUrl = `${config.apiUrl}/api/payments/momo/ipn`;
-  const amount = order.total_amount.toString();
-  const requestType = 'captureWallet';
-  const extraData = '';
+  const partnerCode = 'MOMOBKUN20180529';
+  const accessKey = 'klm0566394464242';
+  const secretKey = 'at67qH6mk8w5Y1n71y45UX97u0vR0ZnL';
+  const momoEndpoint = 'https://test-payment.momo.vn/v2/gateway/api/create';
 
-  // Placeholder - return a mock URL for now
-  // In production, sign request and call MoMo API
-  return `https://test-payment.momo.vn/v2/gateway/pay?orderId=${orderId}&amount=${amount}`;
+  const requestId = Date.now().toString();
+  const orderId = requestId;
+  // Ép kiểu chắc chắn là số nguyên và chuyển thành string
+  const amount = String(Math.round(order.total_amount)); 
+  const orderInfo = 'ThanhToanDonHang'; // Thử dùng chuỗi tĩnh đơn giản nhất để test
+  const redirectUrl = 'http://localhost:5173/payment/success';
+  const ipnUrl = 'https://webhook.site/test';
+  const extraData = '';
+  const requestType = 'captureWallet';
+
+  // 1. TẠO CHUỖI RAW - KIỂM TRA TỪNG DẤU = VÀ &
+  const rawSignature = `accessKey=${accessKey}&amount=${amount}&extraData=${extraData}&ipnUrl=${ipnUrl}&orderId=${orderId}&orderInfo=${orderInfo}&partnerCode=${partnerCode}&redirectUrl=${redirectUrl}&requestId=${requestId}&requestType=${requestType}`;
+
+  // 2. TẠO CHỮ KÝ
+  const signature = crypto
+  .createHmac('sha256', secretKey)
+  .update(Buffer.from(rawSignature, 'utf-8'))
+  .digest('hex');
+
+  // 3. TẠO REQUEST BODY
+  const requestBody = {
+    partnerCode,
+    requestId,
+    orderId,
+    amount: Number(amount), // Phải là số
+    orderInfo,
+    redirectUrl,
+    ipnUrl,
+    extraData,
+    requestType,
+    signature, // Chữ ký đã tạo từ rawSignature
+    lang: 'vi'
+  };
+
+  try {
+    const response = await axios.post(momoEndpoint, requestBody);
+    
+    if (response.data && response.data.payUrl) {
+      payment.trans_id = orderId;
+      await payment.save();
+      return response.data.payUrl;
+    }
+    throw new Error(response.data.message);
+  } catch (error) {
+    // In ra chuỗi bạn đã ký để so sánh với chuỗi MoMo yêu cầu trong log lỗi
+    console.log("--- CHUỖI BẠN ĐÃ KÝ ---");
+    console.log(rawSignature); 
+    console.log("--- DATA GỬI ĐI ---");
+    console.log(JSON.stringify(requestBody));
+    
+    throw new Error("Lỗi MoMo: " + (error.response?.data?.message || error.message));
+  }
 }
+
+
+
 
 /**
  * @desc    MoMo IPN handler
@@ -297,41 +340,48 @@ async function createMoMoUrl(order, payment) {
  */
 export const momoIPN = async (req, res) => {
   try {
-    const { orderId, resultCode, message, transId } = req.body;
+    const { orderId, resultCode, transId, message, signature } = req.body;
 
-    // Find order by MoMo orderId
-    const orderIdClean = orderId.replace('MOMO_', '');
-    const payment = await Payment.findOne({ order: orderIdClean, method: 'MOMO' }).populate('order');
+    // Tìm Payment dựa trên orderId (transaction_id mà chúng ta đã lưu)
+    const payment = await Payment.findOne({ transaction_id: orderId }).populate('order');
 
     if (!payment) {
-      return res.json({ status: 1, message: 'Order not found' });
+      return res.status(404).json({ message: 'Payment not found' });
     }
 
     if (resultCode === 0) {
-      // Payment successful
+      // 1. Cập nhật trạng thái Payment thành công
       payment.status = 'COMPLETED';
       payment.paid_at = new Date();
-      payment.transaction_id = transId;
+      payment.gateway_response = req.body;
       await payment.save();
 
+      // 2. Cập nhật trạng thái Đơn hàng
       const order = payment.order;
       order.status = 'PAID';
       order.payment_status = 'PAID';
       await order.save();
 
+      // 3. TỰ ĐỘNG XUẤT VÉ (Ticket)
       await generateTickets(order._id);
+
+      console.log(`[MoMo] Đơn hàng ${order.code} thanh toán thành công.`);
     } else {
+      // Thanh toán thất bại
       payment.status = 'FAILED';
       await payment.save();
       await releaseOrderSeats(payment.order._id);
+      console.log(`[MoMo] Đơn hàng thất bại: ${message}`);
     }
 
-    res.json({ status: 0, message: 'Success' });
+    // MoMo yêu cầu trả về status 204 hoặc 200 kèm nội dung cụ thể
+    res.status(204).send();
   } catch (error) {
-    console.error('MoMo IPN error:', error);
-    res.json({ status: 1, message: 'Error' });
+    console.error('MoMo IPN Callback Error:', error);
+    res.status(500).json({ message: 'Internal Server Error' });
   }
 };
+
 
 /**
  * @desc    Get payment status

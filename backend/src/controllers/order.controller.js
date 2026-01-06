@@ -185,9 +185,11 @@ export const createOrder = async (req, res, next) => {
     }
 
     const total = subtotal + serviceFee - discount;
+    const orderCode = 'ORD' + Date.now().toString().slice(-8) + Math.floor(Math.random() * 1000).toString().padStart(3, '0');
 
     // Create order
     const order = await Order.create({
+      code: orderCode,
       customer: req.user._id,
       concert: concertId,
       subtotal,
