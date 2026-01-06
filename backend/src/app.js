@@ -17,7 +17,7 @@ import concertRoutes from './routes/concert.routes.js';
 import venueRoutes from './routes/venue.routes.js';
 import orderRoutes from './routes/order.routes.js';
 import ticketRoutes from './routes/ticket.routes.js';
-import paymentRoutes from './routes/payment.routes.js';
+import { createPayment } from './controllers/momo.controller.js';
 import voucherRoutes from './routes/voucher.routes.js';
 import artistRoutes from './routes/artist.routes.js';
 import uploadRoutes from './routes/upload.routes.js';
@@ -119,12 +119,30 @@ app.use('/api/concerts', eventZoneRoutes); // Event zone routes nested under con
 app.use('/api/venues', venueRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/tickets', ticketRoutes);
-app.use('/api/payments', paymentRoutes);
+//app.use('/api/payments', paymentRoutes);
 app.use('/api/vouchers', voucherRoutes);
 app.use('/api/artists', artistRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/categories', categoryRoutes);
+app.post('/api/payment', async (req, res) => {
+    try {
+        const { amount, orderInfo } = req.body;
 
+        if (!amount) {
+            return res.status(400).json({ message: "Số tiền (amount) là bắt buộc" });
+        }
+
+        // Gọi service đã tách ra
+        const result = await createPayment(amount, orderInfo || "Thanh toan don hang");
+        
+        // Trả về kết quả (bao gồm payUrl để khách thanh toán)
+        return res.status(200).json(result);
+        
+    } catch (error) {
+        console.error("Payment Error:", error);
+        return res.status(500).json({ error: "Lỗi xử lý thanh toán" });
+    }
+});
 /**
  * 404 Handler
  */
