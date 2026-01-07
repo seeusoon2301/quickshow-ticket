@@ -10,7 +10,7 @@ import {
 } from '../controllers/payment.controller.js';
 import { protect } from '../middleware/auth.js';
 import { isAdmin } from '../middleware/roles.js';
-
+import { checkMomoStatus } from '../controllers/momo.controller.js';
 const router = express.Router();
 
 /**
@@ -27,12 +27,11 @@ router.post('/momo/ipn', momoIPN);
  * Protected routes
  */
 router.use(protect);
-
+router.post('/momo/check-status', checkMomoStatus);
 // Create payment
 router.post('/create', createPayment);
 
-// Get payment status
-router.get('/:id/status', getPaymentStatus);
+
 
 // Get payment history
 router.get('/history', getPaymentHistory);

@@ -17,7 +17,7 @@ import concertRoutes from './routes/concert.routes.js';
 import venueRoutes from './routes/venue.routes.js';
 import orderRoutes from './routes/order.routes.js';
 import ticketRoutes from './routes/ticket.routes.js';
-import { createPayment } from './controllers/momo.controller.js';
+import { createPayment, checkMomoStatus  } from './controllers/momo.controller.js';
 import voucherRoutes from './routes/voucher.routes.js';
 import artistRoutes from './routes/artist.routes.js';
 import uploadRoutes from './routes/upload.routes.js';
@@ -143,6 +143,9 @@ app.post('/api/payment', async (req, res) => {
         return res.status(500).json({ error: "Lỗi xử lý thanh toán" });
     }
 });
+// Route check status MoMo
+app.post('/api/payment/momo/check-status', checkMomoStatus);
+
 /**
  * 404 Handler
  */
