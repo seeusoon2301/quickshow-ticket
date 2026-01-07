@@ -114,8 +114,7 @@ export default function EventZonePainter() {
   const [ticketClassForm, setTicketClassForm] = useState({
     name: '',
     color: DEFAULT_COLORS[0],
-    price: '',
-    benefits: ''
+    price: ''
   });
 
   // Fetch all data
@@ -582,8 +581,7 @@ export default function EventZonePainter() {
         body: JSON.stringify({
           name: ticketClassForm.name,
           color: ticketClassForm.color,
-          price: parseFloat(ticketClassForm.price),
-          benefits: ticketClassForm.benefits.split('\n').filter(b => b.trim())
+          price: parseFloat(ticketClassForm.price)
         })
       });
 
@@ -594,12 +592,7 @@ export default function EventZonePainter() {
         setTicketClasses(prev => [...prev, data.data]);
         setSelectedTicketClass(data.data);
         setShowTicketClassForm(false);
-        setTicketClassForm({ 
-          name: '', 
-          color: DEFAULT_COLORS[ticketClasses.length % DEFAULT_COLORS.length], 
-          price: '', 
-          benefits: '' 
-        });
+        setTicketClassForm({ name: '', color: DEFAULT_COLORS[ticketClasses.length % DEFAULT_COLORS.length], price: '' });
       } else {
         throw new Error(data.message);
       }
@@ -739,7 +732,7 @@ export default function EventZonePainter() {
                 Ticket Classes
               </h3>
               <Button variant="ghost" size="sm" onClick={() => {
-                setTicketClassForm({ name: '', color: DEFAULT_COLORS[ticketClasses.length % DEFAULT_COLORS.length], price: '', benefits: '' });
+                setTicketClassForm({ name: '', color: DEFAULT_COLORS[ticketClasses.length % DEFAULT_COLORS.length], price: '' });
                 setShowTicketClassForm(true);
               }}>
                 <Plus className="w-4 h-4" />

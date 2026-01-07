@@ -376,8 +376,8 @@ Content-Type: application/json
   "quota": 100,
   "open_time": "2024-05-01T00:00:00Z",
   "close_time": "2024-06-14T18:00:00Z",
-  "description": "Premium VIP experience",
-  "benefits": ["Best seats", "Meet & greet", "VIP lounge access"]
+  "open_time": "2024-05-01T00:00:00Z",
+  "close_time": "2024-06-14T18:00:00Z"
 }
 ```
 

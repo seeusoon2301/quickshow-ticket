@@ -62,15 +62,23 @@ const EventScheduleSection = ({ event, onBuyTicket }) => {
 
   // Use event.performances array for multiple slots
   const shows = (event.performances || []).map((perf, idx) => {
-  const dateObj = new Date(perf.date);
-  const dateStr = dateObj.toISOString().split('T')[0];
-  // Combine date and time for valid Date parsing
-  const startDateTime = perf.startTime
-    ? new Date(`${dateStr}T${perf.startTime}`)
-    : null;
-  const endDateTime = perf.endTime
-    ? new Date(`${dateStr}T${perf.endTime}`)
-    : null;
+  // Parse perf.date as an instant and combine with perf.startTime/endTime using local components
+  const dateObj = perf.date ? new Date(perf.date) : null;
+  let startDateTime = null;
+  let endDateTime = null;
+  if (dateObj) {
+    const y = dateObj.getFullYear();
+    const m = dateObj.getMonth();
+    const d = dateObj.getDate();
+    if (perf.startTime) {
+      const [hh, mm] = perf.startTime.split(':').map(Number);
+      startDateTime = new Date(y, m, d, hh || 0, mm || 0);
+    }
+    if (perf.endTime) {
+      const [hh, mm] = perf.endTime.split(':').map(Number);
+      endDateTime = new Date(y, m, d, hh || 0, mm || 0);
+    }
+  }
   return {
     id: idx + 1,
     date: dateObj,
@@ -92,9 +100,10 @@ const EventScheduleSection = ({ event, onBuyTicket }) => {
 
   // Get event dates for calendar highlighting
   const eventDates = shows.map(s => {
+    if (!s.date) return null;
     const d = new Date(s.date);
     return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-  });
+  }).filter(Boolean);
 
   // Calendar generation (compact)
   const generateCalendarDays = () => {

@@ -47,10 +47,18 @@ export default function VouchersList() {
   const openModal = (type, voucher = null) => {
     setModal({ type, voucher });
     if (voucher) {
+      const toLocalDateInput = (dateVal) => {
+        if (!dateVal) return '';
+        const d = new Date(dateVal);
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+      };
       setForm({
         ...voucher,
-        valid_from: voucher.valid_from?.split('T')[0] || '',
-        valid_until: voucher.valid_until?.split('T')[0] || '',
+        valid_from: toLocalDateInput(voucher.valid_from),
+        valid_until: toLocalDateInput(voucher.valid_until),
       });
     } else {
       setForm({ ...voucherService.DEFAULT_VOUCHER_FORM, code: voucherService.generateVoucherCode() });
@@ -69,9 +77,25 @@ export default function VouchersList() {
     max_discount: form.max_discount ? parseFloat(form.max_discount) : null,
     min_purchase: form.min_purchase ? parseFloat(form.min_purchase) : 0,
     usage_limit: form.max_uses ? parseInt(form.max_uses, 10) : null,
-    // Giữ nguyên định dạng từ input date (YYYY-MM-DD), Backend Mongoose sẽ tự hiểu
-    valid_from: form.valid_from, 
-    valid_until: form.valid_until,
+    // Convert date-only inputs (YYYY-MM-DD) to UTC ISO instants for consistent storage
+    valid_from: (function() {
+      if (!form.valid_from) return null;
+      const parts = form.valid_from.split('-').map(Number);
+      if (parts.length === 3 && parts.every(p => !Number.isNaN(p))) {
+        const [y, m, d] = parts;
+        return new Date(y, m - 1, d, 0, 0, 0, 0).toISOString();
+      }
+      return new Date(form.valid_from).toISOString();
+    })(),
+    valid_until: (function() {
+      if (!form.valid_until) return null;
+      const parts = form.valid_until.split('-').map(Number);
+      if (parts.length === 3 && parts.every(p => !Number.isNaN(p))) {
+        const [y, m, d] = parts;
+        return new Date(y, m - 1, d, 23, 59, 59, 999).toISOString();
+      }
+      return new Date(form.valid_until).toISOString();
+    })(),
     concerts: form.concerts || [], // Thêm mảng concerts (mặc định rỗng nếu không có)
     description: form.description,
     active: form.active // Có thể giữ lại để điều khiển trạng thái ẩn hiện

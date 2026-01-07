@@ -37,6 +37,7 @@ import CancellationRequests from './pages/Orders/CancellationRequests';
 
 // Tickets
 import TicketClassList from './pages/Tickets/TicketClassList';
+import EventsTickets from './pages/Tickets/EventsTickets';
 
 // Vouchers
 import VouchersList from './pages/Vouchers/VouchersList';
@@ -202,11 +203,11 @@ function AppRoutes() {
         } />
 
         {/* Tickets - Admin & Organizer */}
-        <Route path="tickets" element={
-          <ProtectedRoute allowedRoles={['ADMIN', 'ORG']}>
-            <PlaceholderPage title="Ticket Classes" />
-          </ProtectedRoute>
-        } />
+          <Route path="tickets" element={
+            <ProtectedRoute allowedRoles={['ADMIN', 'ORG']}>
+              <EventsTickets />
+            </ProtectedRoute>
+          } />
         <Route path="events/:concertId/tickets" element={
           <ProtectedRoute allowedRoles={['ADMIN', 'ORG']}>
             <TicketClassList />

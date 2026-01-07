@@ -355,7 +355,7 @@ export const downloadTicket = async (req, res, next) => {
         path: 'concert',
         populate: { path: 'venue', select: 'name address' }
       })
-      .populate('ticketClass', 'name price benefits')
+      .populate('ticketClass', 'name price')
       .populate({
         path: 'showSeat',
         populate: { path: 'seat' }
@@ -404,7 +404,7 @@ export const downloadTicket = async (req, res, next) => {
           total: orderDetail.order.total_amount,
           paidAt: orderDetail.order.updatedAt
         } : null,
-        benefits: ticket.ticketClass?.benefits || []
+        // benefits removed from ticketClass
       }
     });
   } catch (error) {

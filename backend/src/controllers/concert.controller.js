@@ -93,13 +93,23 @@ export const getConcerts = async (req, res, next) => {
 
     if (startDate || endDate) {
       query.start_time = query.start_time || {};
+      const parseDateOnlyToLocal = (s) => {
+        if (!s) return null;
+        // Expecting YYYY-MM-DD or ISO; prefer explicit parse for date-only strings
+        const parts = String(s).split('-').map(Number);
+        if (parts.length >= 3 && parts.every(p => !Number.isNaN(p))) {
+          const [y, m, d] = parts;
+          return new Date(y, m - 1, d, 0, 0, 0, 0);
+        }
+        return new Date(s);
+      };
       if (startDate) {
-        const sd = new Date(startDate);
+        const sd = parseDateOnlyToLocal(startDate);
         sd.setHours(0,0,0,0);
         query.start_time.$gte = sd;
       }
       if (endDate) {
-        const ed = new Date(endDate);
+        const ed = parseDateOnlyToLocal(endDate);
         ed.setHours(23,59,59,999);
         query.start_time.$lte = ed;
       }
@@ -258,7 +268,7 @@ export const createConcert = async (req, res, next) => {
       thumbnail,
       images,
       policies,
-      ticketClasses // Array of { name, price, color, description, benefits }
+      ticketClasses // Array of { name, price, color }
     } = req.body;
 
     // Verify venue exists
@@ -267,20 +277,48 @@ export const createConcert = async (req, res, next) => {
       throw new ApiError(404, 'Venue not found');
     }
 
+    // If performances provided but top-level start_time/end_time missing,
+    // derive them from the first performance (local date + startTime/endTime)
+    const performancesPayload = req.body.performances || [];
+    let derivedStart = start_time;
+    let derivedEnd = end_time;
+    if ((!start_time || !end_time) && performancesPayload.length > 0) {
+      const first = performancesPayload[0];
+      if (first && first.date) {
+        try {
+          const d = new Date(first.date);
+          const y = d.getFullYear();
+          const m = d.getMonth();
+          const day = d.getDate();
+          if (!derivedStart && first.startTime) {
+            const [hh, mm] = first.startTime.split(':').map(Number);
+            derivedStart = new Date(y, m, day, hh || 0, mm || 0).toISOString();
+          }
+          if (!derivedEnd && first.endTime) {
+            const [hh, mm] = first.endTime.split(':').map(Number);
+            derivedEnd = new Date(y, m, day, hh || 0, mm || 0).toISOString();
+          }
+        } catch (err) {
+          // ignore parse errors here; Mongoose will validate later
+        }
+      }
+    }
+
     // Create concert
     const concert = await Concert.create({
       title,
       description,
       category,
       genre,
-      start_time,
-      end_time,
+      start_time: derivedStart,
+      end_time: derivedEnd,
       venue,
       organizer: req.user._id,
       artists: artists || [],
       thumbnail,
       images: images || [],
       policies: policies || {},
+      performances: performancesPayload,
       status: req.user.role === 'ADMIN' ? 'PUB' : 'DRAFT'
     });
 
@@ -293,11 +331,9 @@ export const createConcert = async (req, res, next) => {
           name: tc.name,
           color: tc.color || '#3B82F6',
           price: tc.price,
-          quota: tc.quota || 0, // Will be set when seats are assigned
+          quota: tc.quota || 0,
           open_time: tc.open_time,
           close_time: tc.close_time,
-          description: tc.description,
-          benefits: tc.benefits || [],
           sortOrder: i
         });
       }
@@ -351,6 +387,29 @@ export const updateConcert = async (req, res, next) => {
         updates[field] = req.body[field];
       }
     });
+
+    // If performances are provided in the update payload, derive top-level start_time/end_time
+    if (req.body.performances && Array.isArray(req.body.performances) && req.body.performances.length > 0) {
+      const first = req.body.performances[0];
+      if (first && first.date) {
+        try {
+          const d = new Date(first.date);
+          const y = d.getFullYear();
+          const m = d.getMonth();
+          const day = d.getDate();
+          if (first.startTime && !updates.start_time) {
+            const [hh, mm] = String(first.startTime).split(':').map(Number);
+            updates.start_time = new Date(y, m, day, hh || 0, mm || 0).toISOString();
+          }
+          if (first.endTime && !updates.end_time) {
+            const [hh, mm] = String(first.endTime).split(':').map(Number);
+            updates.end_time = new Date(y, m, day, hh || 0, mm || 0).toISOString();
+          }
+        } catch (err) {
+          // ignore parse errors; validation will catch invalid values
+        }
+      }
+    }
 
     concert = await Concert.findByIdAndUpdate(
       req.params.id,
@@ -425,9 +484,10 @@ export const getConcertSeats = async (req, res, next) => {
     const ticketClasses = await TicketClass.find({ concert: concert._id });
 
     // Get show seats (seat assignments)
+    // Include ticketClass sale window fields so we can enforce sale-window when returning seats
     const showSeats = await ShowSeat.find({ concert: concert._id })
       .populate('seat')
-      .populate('ticketClass', 'name price color')
+      .populate('ticketClass', 'name price color open_time close_time')
       .populate('locked_by', '_id');
 
     // Create a map for quick lookup
@@ -436,6 +496,7 @@ export const getConcertSeats = async (req, res, next) => {
       // include locked_by id and whether locked by current requester
       const lockedById = ss.locked_by ? ss.locked_by._id || ss.locked_by : null;
       const lockedByCurrentUser = req.user ? (lockedById && req.user._id.toString() === lockedById.toString()) : false;
+      // compute effective status later; keep original object available
       showSeatMap[ss.seat._id.toString()] = { ...ss.toObject(), lockedById, lockedByCurrentUser };
     });
 
@@ -454,7 +515,18 @@ export const getConcertSeats = async (req, res, next) => {
         isActive: seat.isActive,
         // Show seat assignment info (if assigned to this concert)
         showSeatId: showSeat?._id,
-        status: showSeat?.status || 'UNASSIGNED',
+        // If the assigned ticketClass has a closed sale window, mark returned status as LOCKED so UI treats it as unavailable
+        status: (function() {
+          const s = showSeat?.status || 'UNASSIGNED';
+          const tc = showSeat?.ticketClass;
+          if (tc && (tc.open_time || tc.close_time)) {
+            const now = new Date();
+            if ((tc.open_time && new Date(tc.open_time) > now) || (tc.close_time && new Date(tc.close_time) < now)) {
+              return 'LOCKED';
+            }
+          }
+          return s;
+        })(),
         lockedById: showSeat?.lockedById || null,
         lockedByCurrentUser: showSeat?.lockedByCurrentUser || false,
         ticketClass: showSeat?.ticketClass ? {
@@ -466,6 +538,17 @@ export const getConcertSeats = async (req, res, next) => {
         price: showSeat?.price || showSeat?.ticketClass?.price || 0
       };
     });
+    // Recompute stats based on effective returned statuses
+    const returnedAvailable = showSeats.filter(ss => {
+      const tc = ss.ticketClass;
+      const now = new Date();
+      if (tc && (tc.open_time || tc.close_time)) {
+        if ((tc.open_time && new Date(tc.open_time) > now) || (tc.close_time && new Date(tc.close_time) < now)) {
+          return false;
+        }
+      }
+      return ss.status === 'AVAILABLE';
+    }).length;
 
     res.json({
       success: true,
@@ -481,7 +564,7 @@ export const getConcertSeats = async (req, res, next) => {
           total: venueSeats.length,
           assigned: showSeats.length,
           unassigned: venueSeats.length - showSeats.length,
-          available: showSeats.filter(ss => ss.status === 'AVAILABLE').length,
+          available: returnedAvailable,
           sold: showSeats.filter(ss => ss.status === 'SOLD').length,
           locked: showSeats.filter(ss => ss.status === 'LOCKED').length
         }
@@ -794,7 +877,7 @@ export const addTicketClass = async (req, res, next) => {
       throw new ApiError(403, 'You can only update your own concerts');
     }
 
-    const { name, color, price, description, benefits, open_time, close_time } = req.body;
+    const { name, color, price, open_time, close_time } = req.body;
 
     // Get max sortOrder
     const maxOrder = await TicketClass.findOne({ concert: concert._id })
@@ -807,8 +890,7 @@ export const addTicketClass = async (req, res, next) => {
       color: color || '#3B82F6',
       price,
       quota: 0,
-      description,
-      benefits: benefits || [],
+      // description/benefits removed
       open_time,
       close_time,
       sortOrder: (maxOrder?.sortOrder || 0) + 1
@@ -852,17 +934,68 @@ export const updateTicketClass = async (req, res, next) => {
     }
 
     // Update prices in ShowSeats if price changed
+    let updatedSeatCount = 0;
     if (req.body.price !== undefined) {
-      await ShowSeat.updateMany(
-        { concert: concert._id, ticketClass: ticketClass._id },
-        { price: req.body.price }
+      // By default only update AVAILABLE seats. Admin may include LOCKED seats
+      // by setting query param `includeLocked=true` or sending `includeLocked` in body.
+      const includeLocked = (req.query.includeLocked === 'true') || (req.body.includeLocked === true);
+      const statuses = includeLocked ? ['AVAILABLE', 'LOCKED'] : ['AVAILABLE'];
+
+      // Find affected show seats first so we can emit their IDs to clients
+      const affectedSeats = await ShowSeat.find(
+        { concert: concert._id, ticketClass: ticketClass._id, status: { $in: statuses } }
+      ).select('_id').lean();
+      const seatIds = affectedSeats.map(s => s._id.toString());
+
+      const result = await ShowSeat.updateMany(
+        { concert: concert._id, ticketClass: ticketClass._id, status: { $in: statuses } },
+        { $set: { price: req.body.price } }
       );
+      updatedSeatCount = result.modifiedCount || result.nModified || 0;
+
+      // Emit socket event to notify connected clients viewing this concert
+      try {
+        const io = req.app && req.app.get && req.app.get('io');
+        if (io && seatIds.length > 0) {
+          io.to(`concert:${concert._id}`).emit('seats-price-updated', {
+            seatIds,
+            ticketClassId: ticketClass._id,
+            price: req.body.price,
+            updatedSeatCount
+          });
+        }
+      } catch (err) {
+        // do not fail the request if socket emit fails
+        console.error('Failed to emit seats-price-updated', err);
+      }
+    }
+
+    // Emit sale window updates if open_time/close_time changed
+    if (req.body.open_time !== undefined || req.body.close_time !== undefined) {
+      try {
+        const affectedSeats = await ShowSeat.find({ concert: concert._id, ticketClass: ticketClass._id }).select('_id').lean();
+        const seatIds = affectedSeats.map(s => s._id.toString());
+        const io = req.app && req.app.get && req.app.get('io');
+        if (io) {
+          io.to(`concert:${concert._id}`).emit('seats-sale-window-updated', {
+            seatIds,
+            ticketClassId: ticketClass._id,
+            open_time: ticketClass.open_time,
+            close_time: ticketClass.close_time
+          });
+        }
+      } catch (err) {
+        console.error('Failed to emit seats-sale-window-updated', err);
+      }
     }
 
     res.json({
       success: true,
       message: 'Ticket class updated',
-      data: ticketClass
+      data: {
+        ticketClass,
+        updatedSeatCount
+      }
     });
   } catch (error) {
     next(error);
